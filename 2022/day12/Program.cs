@@ -48,25 +48,72 @@ class Program
         // PrintGraph(graph);
 
         // 2
-        List<Node> allnodes = graph.Cast<Node>().ToList();
-        List<Node> unvisited = allnodes.ToList();
+        List<Node> unvisited = graph.Cast<Node>().ToList();
 
         // 3
         List<Node> visited = new();
+        List<Node> toVisit = new();
         startNode.Cost = 0;
         unvisited.Remove(startNode);
+        toVisit.Add(startNode);
 
         int cost = 1;
 
         // 5
-        while(unvisited.Count > 0)
+        while((unvisited.Count > 0 || visited.Contains(endNode)) && toVisit.Count != 0)
         {
+            List<Node> neighborsMet = new();
             // 4
-            foreach()
+            foreach(Node reachable in GetReachableNeighboursFromList(toVisit, graph).Distinct().Except(visited))
             {
+                if(reachable.Cost > cost)
+                        reachable.Cost = cost;
 
+                    unvisited.Remove(reachable);
+                    neighborsMet.Add(reachable);
             }
+            cost++;
+            visited.AddRange(toVisit);
+            toVisit.Clear();
+            toVisit.AddRange(neighborsMet);
+            System.Console.WriteLine(unvisited.Count);
         }
+
+        PrintCostGraph(graph);
+
+        System.Console.WriteLine("Cost to get to endnode from startnode: " + endNode.Cost);
+
+
+        // Find shortest path between EndNode and any node with elevation a
+
+
+        Console.ReadLine();
+    }
+
+    private static void PrintCostGraph(Node[,] graph)
+    {
+        int graphHeight = graph.GetLength(0);
+        int graphWidth = graph.GetLength(1);    
+
+        for(int i = 0; i < graphHeight; i++)
+        {
+            for(int j = 0; j < graphWidth; j++)
+            {
+                System.Console.Write($"{(graph[i,j].Cost == 1000000 ? "inf" : graph[i,j].Cost.ToString()), 4}");
+            }
+            System.Console.WriteLine();
+        }
+    }
+
+    private static List<Node> GetReachableNeighboursFromList(List<Node> nodes, Node[,] graph)
+    {
+        List<Node> returnValue = new();
+        foreach(Node node in nodes)
+        {
+            returnValue.AddRange(GetReachableNeighbours(node, graph));
+        }
+
+        return returnValue;
     }
 
     private static List<Node> GetReachableNeighbours(Node node, Node[,] graph)
@@ -90,7 +137,6 @@ class Program
 
     private static void PrintGraph(Node[,] graph)
     {
-        // geprinte array is inverted...?
         int graphHeight = graph.GetLength(0);
         int graphWidth = graph.GetLength(1);
 
