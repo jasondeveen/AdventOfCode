@@ -1,4 +1,6 @@
-﻿namespace day12;
+﻿using System.Runtime.Intrinsics.Arm;
+
+namespace day12;
 
 class Program
 {
@@ -46,7 +48,29 @@ class Program
         }
 
         // PrintGraph(graph);
+        // System.Console.WriteLine();
 
+        // 5
+        // ApplyAlgo(graph, startNode, GetReachableNeighbours, new List<Node>{endNode});
+        // PrintCostGraph(graph);
+        // System.Console.WriteLine("Cost to get to endnode from startnode: " + endNode.Cost);
+
+
+        // Find shortest path between EndNode and any node with elevation a
+        List<Node> aElevationNodes = graph.Cast<Node>()
+                    .Where(node => node.Value == 'a')
+                    .ToList();
+                    
+        ApplyAlgo(graph, endNode, GetNeighborsThatCanReachNode, aElevationNodes);
+        // PrintCostGraph(graph);
+        Node closestNodeToEndWithAElevation = aElevationNodes.OrderBy(n => n.Cost).First();
+        System.Console.WriteLine("Cost to get from endNode to a node with elevation a: " + closestNodeToEndWithAElevation.Cost);
+
+        Console.ReadLine();
+    }
+
+    private static void ApplyAlgo(Node[,] graph, Node startNode, Func<Node, Node[,], List<Node>> moveFinder, List<Node> nodesToFind)
+    {
         // 2
         List<Node> unvisited = graph.Cast<Node>().ToList();
 
@@ -59,59 +83,57 @@ class Program
 
         int cost = 1;
 
-        // 5
-        while((unvisited.Count > 0 || visited.Contains(endNode)) && toVisit.Count != 0)
+        while (unvisited.Count > 0 && toVisit.Count != 0 && !visited.Intersect(nodesToFind).Any())
         {
             List<Node> neighborsMet = new();
             // 4
-            foreach(Node reachable in GetReachableNeighboursFromList(toVisit, graph).Distinct().Except(visited))
+            foreach (Node reachable in GetReachableNodesFromList(toVisit, graph, moveFinder).Distinct().Except(visited))
             {
-                if(reachable.Cost > cost)
-                        reachable.Cost = cost;
+                if (reachable.Cost > cost)
+                    reachable.Cost = cost;
 
-                    unvisited.Remove(reachable);
-                    neighborsMet.Add(reachable);
+                unvisited.Remove(reachable);
+                neighborsMet.Add(reachable);
             }
             cost++;
             visited.AddRange(toVisit);
             toVisit.Clear();
             toVisit.AddRange(neighborsMet);
-            System.Console.WriteLine(unvisited.Count);
-        }
-
-        PrintCostGraph(graph);
-
-        System.Console.WriteLine("Cost to get to endnode from startnode: " + endNode.Cost);
-
-
-        // Find shortest path between EndNode and any node with elevation a
-
-
-        Console.ReadLine();
-    }
-
-    private static void PrintCostGraph(Node[,] graph)
-    {
-        int graphHeight = graph.GetLength(0);
-        int graphWidth = graph.GetLength(1);    
-
-        for(int i = 0; i < graphHeight; i++)
-        {
-            for(int j = 0; j < graphWidth; j++)
-            {
-                System.Console.Write($"{(graph[i,j].Cost == 1000000 ? "inf" : graph[i,j].Cost.ToString()), 4}");
-            }
-            System.Console.WriteLine();
         }
     }
 
-    private static List<Node> GetReachableNeighboursFromList(List<Node> nodes, Node[,] graph)
+    private static List<Node> GetReachableNodesFromList(List<Node> nodes, Node[,] graph, Func<Node, Node[,], List<Node>> moveFinder)
     {
         List<Node> returnValue = new();
         foreach(Node node in nodes)
         {
-            returnValue.AddRange(GetReachableNeighbours(node, graph));
+            returnValue.AddRange(moveFinder(node, graph));
         }
+
+        return returnValue;
+    }
+
+    #region moveFinders
+
+    private static List<Node> GetNeighborsThatCanReachNode(Node node, Node[,] graph)
+    {
+        List<Node> returnValue = new();
+
+        // node above me
+        if(node.Row > 0 && graph[node.Row - 1, node.Column].Down)
+            returnValue.Add(graph[node.Row - 1, node.Column]);
+
+        // node below me
+        if(node.Row < graph.GetLength(0) - 1 && graph[node.Row + 1, node.Column].Up)
+            returnValue.Add(graph[node.Row + 1, node.Column]);
+
+        // node left of me
+        if(node.Column > 0 && graph[node.Row, node.Column - 1].Right)
+            returnValue.Add(graph[node.Row, node.Column - 1]);
+        
+        // node right of me
+        if(node.Column < graph.GetLength(1) - 1 && graph[node.Row, node.Column + 1].Left)
+            returnValue.Add(graph[node.Row, node.Column + 1]);
 
         return returnValue;
     }
@@ -135,6 +157,9 @@ class Program
         return returnValue;
     }
 
+    #endregion
+
+    #region Printing
     private static void PrintGraph(Node[,] graph)
     {
         int graphHeight = graph.GetLength(0);
@@ -177,6 +202,24 @@ class Program
         }
     }
 
+    private static void PrintCostGraph(Node[,] graph)
+    {
+        int graphHeight = graph.GetLength(0);
+        int graphWidth = graph.GetLength(1);    
+
+        for(int i = 0; i < graphHeight; i++)
+        {
+            for(int j = 0; j < graphWidth; j++)
+            {
+                System.Console.Write($"{(graph[i,j].Cost == 1000000 ? "inf" : graph[i,j].Cost.ToString()), 4}");
+            }
+            System.Console.WriteLine();
+        }
+    }
+
+    #endregion
+
+    #region setup
 
     private static void GenerateVertices(Node node, Node[,] graph)
     {
@@ -231,6 +274,8 @@ class Program
 
         throw new Exception("AAAAAAAA");
     }
+
+    #endregion
 }
 
 class Node
