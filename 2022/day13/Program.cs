@@ -79,14 +79,16 @@ class Program
 
         
 
-        if(input == "5,6,7")
-            ;
+        // if(input == "5,6,7")
+        //     ;
 
         if(isTopLevel)
             input = input[1..^1];
 
-        if(input == "[]" || input == "")
+        if(input == "[]")
             return new List<string>();
+        if (input == "")
+            return null;
 
         int bracketLevel = 0;
         bool bracketOpen = false;
