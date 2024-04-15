@@ -1,4 +1,6 @@
-﻿namespace day13_2;
+﻿using System.Net.Mail;
+
+namespace day13_2;
 
 class Program
 {
@@ -151,20 +153,19 @@ class Program
             }
         }
 
-        // if (raw != "[]" && raw == returnvalue[0] && returnvalue[0][0] == '[' && returnvalue[0][^1] == ']')
-        //     returnvalue[0] = returnvalue[0][1..^1];
-
-
-        foreach (string o in returnvalue)
-        {
-            System.Console.WriteLine("\t" + o);
-        }
+        // foreach (string o in returnvalue)
+        // {
+        //     System.Console.WriteLine("\t" + o);
+        // }
 
         return returnvalue;
     }
 
     private static void QuickSort(LinkedList<string> input)
     {
+        if (input.Count == 1)
+            return;
+
         LinkedListNode<string> pivotNode = input.Last;
 
         LinkedListNode<string> lastMovedNode = input.First;
@@ -184,21 +185,103 @@ class Program
         input.Remove(pivotNode);
         input.AddAfter(lastMovedNode, pivotNode);
 
-        //todo selectie van begin tot pivotnode maken en dit recursive calle
-        // selectie van 1 voorbij pivot tot einde maken en dit recursive callen
-        // probleem: subselectie van linkedlist maken zonder een nieuwe linkelist te maken, want we hetzelfde object gebruiken (by ref)
-        QuickSort(input.);
+        LinkedList<string> left = TakeSubLL(input, input.First, lastMovedNode);
+        QuickSort(left);
+        Attach(input, left, true);
+
+
+        LinkedList<string> right = TakeSubLL(input, pivotNode.Next, input.Last);
+        QuickSort(right);
+        Attach(input, right, false);
     }
 
+    /// <summary>
+    /// attach <paramref name="listToAttach"/> to <paramref name="mainList"/>
+    /// </summary>
+    /// <param name="mainList"></param>
+    /// <param name="listToAttach"></param>
+    /// <param name="attachToFront"></param>
+    /// <exception cref="NotImplementedException"></exception>
+    private static void Attach(LinkedList<string> mainList, LinkedList<string> listToAttach, bool attachToFront = false)
+    {
+        var first = listToAttach.First;
+        var current = first.Next;
+        listToAttach.RemoveFirst();
+
+        if (attachToFront)
+            mainList.AddFirst(first);
+        else
+            mainList.AddLast(first);
+
+        LinkedListNode<string> next = null;
+        LinkedListNode<string> lastAttached = first;
+        while(current != null){
+            next = current.Next;
+            listToAttach.Remove(current);
+            mainList.AddAfter(lastAttached, current);
+            lastAttached = current;
+        }
+
+        ;
+    }
+
+    /// <summary>
+    /// 0-based. Returns -1 if not found
+    /// </summary>
+    /// <param name="list"></param>
+    /// <param name="node"></param>
+    /// <returns></returns>
     private static int FindIndex(LinkedList<string> list, LinkedListNode<string> node)
     {
-        int c = 1;
+        int c = 0;
+        bool found = false;
 
-        for (LinkedListNode<string> current = list.First; current != node; current = current.Next)
+        for (LinkedListNode<string> current = list.First; current != null; current = current.Next)
         {
+            if (node == current)
+            {
+                found = true;
+                break;
+            }
             c++;
         }
 
-        return c;
+        return found ? c : -1;
+    }
+
+    /// <summary>
+    /// includes start and last
+    /// </summary>
+    /// <param name="list"></param>
+    /// <param name="start"></param>
+    /// <param name="last"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    private static LinkedList<string> TakeSubLL(LinkedList<string> list, LinkedListNode<string> start, LinkedListNode<string> last)
+    {
+        LinkedList<string> returnList = new LinkedList<string>();
+
+        int startIdx = FindIndex(list, start);
+        int lastIdx = FindIndex(list, last);
+
+        if (startIdx == -1 || lastIdx == -1)
+            throw new Exception("start or end are not in list");
+
+        if (startIdx > lastIdx)
+            throw new Exception("start comes after last");
+
+        LinkedListNode<string> current = start;
+        LinkedListNode<string> next = null;
+        LinkedListNode<string> terminator = last.Next;
+
+        while (current != terminator)
+        {
+            next = current.Next;
+            list.Remove(current);
+            returnList.AddLast(current);
+            current = next;
+        }
+
+        return returnList;
     }
 }
