@@ -42,7 +42,17 @@ class Program
 
         QuickSort(llInputToSort);
 
+        foreach(string s in llInputToSort)
+            System.Console.WriteLine(s);
 
+        int idx2 = FindIndex(llInputToSort, llInputToSort.Find("[[6]]")) + 1;
+        int idx6 = FindIndex(llInputToSort, llInputToSort.Find("[[2]]")) + 1;
+
+        System.Console.WriteLine("[[2]]: " + idx2);
+        System.Console.WriteLine("[[6]]: " + idx6);
+
+        System.Console.WriteLine("Product = " + (idx2 * idx6));
+        
     }
 
     private static bool? IsInOrder(string left, string right)
@@ -106,7 +116,7 @@ class Program
     private static List<string> GetElements(string raw)
     {
         List<string> returnvalue = new List<string>();
-        System.Console.WriteLine(raw);
+        // System.Console.WriteLine(raw);
 
         raw = raw[1..^1];
 
@@ -168,12 +178,19 @@ class Program
 
         LinkedListNode<string> pivotNode = input.Last;
 
-        LinkedListNode<string> lastMovedNode = input.First;
+        LinkedListNode<string> lastMovedNode = null;
         for (LinkedListNode<string> currentNode = input.First; currentNode != pivotNode; currentNode = currentNode.Next)
         {
             if (IsInOrder(currentNode.Value, pivotNode.Value) ?? false)
             {
-                if (lastMovedNode != currentNode)
+                if (lastMovedNode == null && lastMovedNode != currentNode)
+                {
+                    input.Remove(currentNode);
+                    input.AddFirst(currentNode);
+                    lastMovedNode = currentNode;
+                }
+
+                if (lastMovedNode != null && lastMovedNode != currentNode)
                 {
                     input.Remove(currentNode);
                     input.AddAfter(lastMovedNode, currentNode);
@@ -183,16 +200,22 @@ class Program
         }
 
         input.Remove(pivotNode);
-        input.AddAfter(lastMovedNode, pivotNode);
+        if (lastMovedNode == null)
+            input.AddFirst(pivotNode);
+        else
+        {
+            input.AddAfter(lastMovedNode, pivotNode);
+            LinkedList<string> left = TakeSubLL(input, input.First, lastMovedNode ?? input.First);
+            QuickSort(left);
+            Attach(input, left, true);
+        }
 
-        LinkedList<string> left = TakeSubLL(input, input.First, lastMovedNode);
-        QuickSort(left);
-        Attach(input, left, true);
-
-
-        LinkedList<string> right = TakeSubLL(input, pivotNode.Next, input.Last);
-        QuickSort(right);
-        Attach(input, right, false);
+        if (pivotNode.Next != null)
+        {
+            LinkedList<string> right = TakeSubLL(input, pivotNode.Next, input.Last);
+            QuickSort(right);
+            Attach(input, right, false);
+        }
     }
 
     /// <summary>
@@ -215,11 +238,13 @@ class Program
 
         LinkedListNode<string> next = null;
         LinkedListNode<string> lastAttached = first;
-        while(current != null){
+        while (listToAttach.First != null)
+        {
             next = current.Next;
             listToAttach.Remove(current);
             mainList.AddAfter(lastAttached, current);
             lastAttached = current;
+            current = next;
         }
 
         ;
