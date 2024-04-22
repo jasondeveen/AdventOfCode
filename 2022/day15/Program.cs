@@ -15,58 +15,68 @@ class Program
 
         IEnumerable<Circle> circles = GetCircles(SensorsAndBeacons);
 
-        Map boundaries = GetBoundaries(circles);
-
-        System.Console.WriteLine(CountOccupiedPositions(lineToCheck, circles, SensorsAndBeacons));
+        System.Console.WriteLine(GetMergedRanges(GetOccupiedRanges(lineToCheck, circles)).Select(r => r.End - r.Start).Sum());
     }
 
-    private static int CountOccupiedPositions(int lineToCheck, IEnumerable<Circle> circles, IEnumerable<((int, int), (int, int))> sensorsAndBeacons)
+    private static List<Range> GetOccupiedRanges(int lineToCheck, IEnumerable<Circle> circles)
     {
         var occupiedRanges = new List<Range>();
 
-        foreach (Circle circle in circles.Where(c => Math.Abs(lineToCheck - c.Center.Y) > c.Radius)) // circles that are in range
+        foreach (Circle circle in circles.Where(c => Math.Abs(lineToCheck - c.Center.Y) < c.Radius)) // circles that are in range
         {
-            int leftover = Math.Abs(lineToCheck - circle.Center.Y);
+            int leftover = circle.Radius - Math.Abs(lineToCheck - circle.Center.Y);
 
             Range range = new Range(circle.Center.X - leftover, circle.Center.X + leftover);
 
             occupiedRanges.Add(range);
         }
 
-
-        return CountIndices(occupiedRanges);
+        return occupiedRanges;
     }
 
-    private static int CountIndices(List<Range> occupiedRanges)
+    private static int MergeRanges(List<Range> inputRanges, ref List<Range> mergedRanges)
     {
-        List<Range> mergedRanges = new List<Range>();
+        mergedRanges = new List<Range>();
+        int expansions = 0;
 
-        
-    }
-
-    private static Map GetBoundaries(IEnumerable<Circle> circles)
-    {
-        int left = 0;
-        int right = 0;
-        int high = 0;
-        int low = 0;
-
-        foreach (Circle circle in circles)
+        foreach (Range r in inputRanges)
         {
-            if (circle.Center.X - circle.Radius < left)
-                left = circle.Center.X - circle.Radius;
+            var containingRange = mergedRanges.FirstOrDefault(cr => (cr.Start <= r.Start && r.Start <= cr.End)
+                                                                    || (cr.Start <= r.End && r.End <= cr.End));
 
-            if (circle.Center.X + circle.Radius > right)
-                right = circle.Center.X + circle.Radius;
+            if (containingRange == null)
+            {
+                mergedRanges.Add(r);
+            }
+            else
+            {
+                expansions++;
 
-            if (circle.Center.Y - circle.Radius < low)
-                low = circle.Center.Y - circle.Radius;
+                if (r.Start < containingRange.Start)
+                    containingRange.Start = r.Start;
 
-            if (circle.Center.Y + circle.Radius > high)
-                high = circle.Center.Y + circle.Radius;
+                if (r.End > containingRange.End)
+                    containingRange.End = r.End;
+            }
         }
 
-        return new Map(high, low, left, right);
+        return expansions;
+    }
+
+    private static List<Range> GetMergedRanges(List<Range> occupiedRanges)
+    {
+        List<Range> mergedRanges = new List<Range>();
+        MergeRanges(occupiedRanges, ref mergedRanges);
+
+        int mergesFound = 0;
+        do
+        {
+            List<Range> temp = mergedRanges.Select(r => new Range(r.Start, r.End)).ToList(); // Deep copy
+            mergedRanges.Clear();
+            mergesFound = MergeRanges(temp, ref mergedRanges);
+        } while (mergesFound > 0);
+
+        return mergedRanges;
     }
 
     private static IEnumerable<((int, int), (int, int))> GetSensorsAndBeacons(string[] input)
@@ -101,6 +111,18 @@ class Program
         return Math.Abs(item2.Item1 - item1.Item1) + Math.Abs(item2.Item2 - item1.Item2);
     }
 
+    public class Range
+    {
+        public int Start;
+        public int End;
+
+        public Range(int aStart, int aEnd)
+        {
+            Start = aStart;
+            End = aEnd;
+        }
+    }
+
     public class Coordinate
     {
         public int X;
@@ -121,22 +143,6 @@ class Program
         {
             Center = aCenter;
             Radius = aRadius;
-        }
-    }
-
-    public class Map
-    {
-        public int High;
-        public int Low;
-        public int Left;
-        public int Right;
-
-        public Map(int aHigh, int aLow, int aLeft, int aRight)
-        {
-            High = aHigh;
-            Low = aLow;
-            Left = aLeft;
-            Right = aRight;
         }
     }
 }
