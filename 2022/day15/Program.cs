@@ -9,13 +9,23 @@ class Program
     static void Main(string[] args)
     {
         string[] input = File.ReadAllLines(args[0]);
-        int lineToCheck = args.Length == 2 ? int.Parse(args[1]) : 10;
+        int lineToCheck = args[0] == "testinput.txt" ? 10 : 2000000;
+        int maxSize = args[0] == "testinput.txt" ? 20 : 4000000;
 
         IEnumerable<((int, int), (int, int))> SensorsAndBeacons = GetSensorsAndBeacons(input);
 
         IEnumerable<Circle> circles = GetCircles(SensorsAndBeacons);
 
-        System.Console.WriteLine(GetMergedRanges(GetOccupiedRanges(lineToCheck, circles)).Select(r => r.End - r.Start).Sum());
+        List<Range> occupiedRanges = GetOccupiedRanges(lineToCheck, circles);
+        CombineRanges(occupiedRanges);
+
+        System.Console.WriteLine("Occupied positions in row " + lineToCheck + ": " + occupiedRanges.Select(r => r.End - r.Start).Sum());
+
+        List<Range> takenPositions = new List<Range>();
+        for (int i = 0; i < maxSize; i++)
+        {
+            CombineRanges(takenPositions, GetOccupiedRanges(i, circles));
+        }
     }
 
     private static List<Range> GetOccupiedRanges(int lineToCheck, IEnumerable<Circle> circles)
@@ -34,49 +44,40 @@ class Program
         return occupiedRanges;
     }
 
-    private static int MergeRanges(List<Range> inputRanges, ref List<Range> mergedRanges)
+    private static void CombineRanges(List<Range> list1, List<Range> list2 = null)
     {
-        mergedRanges = new List<Range>();
         int expansions = 0;
-
-        foreach (Range r in inputRanges)
-        {
-            var containingRange = mergedRanges.FirstOrDefault(cr => (cr.Start <= r.Start && r.Start <= cr.End)
-                                                                    || (cr.Start <= r.End && r.End <= cr.End));
-
-            if (containingRange == null)
-            {
-                mergedRanges.Add(r);
-            }
-            else
-            {
-                expansions++;
-
-                if (r.Start < containingRange.Start)
-                    containingRange.Start = r.Start;
-
-                if (r.End > containingRange.End)
-                    containingRange.End = r.End;
-            }
-        }
-
-        return expansions;
-    }
-
-    private static List<Range> GetMergedRanges(List<Range> occupiedRanges)
-    {
-        List<Range> mergedRanges = new List<Range>();
-        MergeRanges(occupiedRanges, ref mergedRanges);
-
-        int mergesFound = 0;
         do
         {
-            List<Range> temp = mergedRanges.Select(r => new Range(r.Start, r.End)).ToList(); // Deep copy
-            mergedRanges.Clear();
-            mergesFound = MergeRanges(temp, ref mergedRanges);
-        } while (mergesFound > 0);
+            // TODO 1 lijst op zichzelf merged lukt, maar hoe 2 lijsten naar 1? op deze manier moet list1 altijd gecleared worden.
 
-        return mergedRanges;
+            list2 = list1.Select(r => new Range(r.Start, r.End)).ToList(); // Deep copy
+            list1.Clear();
+
+            expansions = 0;
+
+            foreach (Range r in list2)
+            {
+                var containingRange = list1.FirstOrDefault(cr => (cr.Start <= r.Start && r.Start <= cr.End)
+                                                                    || (cr.Start <= r.End && r.End <= cr.End));
+
+                if (containingRange == null)
+                {
+                    list1.Add(r);
+                }
+                else
+                {
+                    expansions++;
+
+                    if (r.Start < containingRange.Start)
+                        containingRange.Start = r.Start;
+
+                    if (r.End > containingRange.End)
+                        containingRange.End = r.End;
+                }
+            }
+        }
+        while (expansions > 0);
     }
 
     private static IEnumerable<((int, int), (int, int))> GetSensorsAndBeacons(string[] input)
