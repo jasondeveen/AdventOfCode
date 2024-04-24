@@ -21,11 +21,71 @@ class Program
 
         System.Console.WriteLine("Occupied positions in row " + lineToCheck + ": " + occupiedRanges.Select(r => r.End - r.Start).Sum());
 
+        Map boundaries = new Map(maxSize, 0, 0, maxSize);
         List<Range> takenPositions = new List<Range>();
-        for (int i = 0; i < maxSize; i++)
+        List<(int, List<int>)> freePositionsPerRow = new List<(int, List<int>)>();
+        List<int> freePositionsRow = new List<int>();
+        for (int i = boundaries.Low; i < boundaries.High; i++)
         {
-            CombineRanges(takenPositions, GetOccupiedRanges(i, circles));
+            takenPositions = GetOccupiedRanges(i, circles);
+            CombineRanges(takenPositions);
+
+            if (takenPositions.First().Start> 0 || takenPositions.First().End < maxSize)
+            {
+                freePositionsRow = GetFreePositions(takenPositions, boundaries);
+                freePositionsPerRow.Add((i, freePositionsRow));
+            }
+            System.Console.WriteLine(i + " freePositionsPerRow.Length = " + freePositionsPerRow.Count);
         }
+
+        System.Console.WriteLine("Left max: " + boundaries.Left + " Right max: " + boundaries.Right);
+        foreach (var free in freePositionsPerRow)
+        {
+            System.Console.WriteLine("Free positions on row " + free.Item1);
+            foreach (int pos in free.Item2)
+            {
+                System.Console.WriteLine("\t" + pos);
+            }
+        }
+
+        if (freePositionsPerRow.Count == 1 && freePositionsPerRow.First().Item2.Count == 1)
+        {
+            double x = freePositionsPerRow.First().Item2.First();
+            double y = freePositionsPerRow.First().Item1;
+            System.Console.WriteLine($"Tuning frequency = {x} * 4.000.000 + {y} = {x * 4_000_000 + y}");
+        }
+    }
+
+    private static List<int> GetFreePositions(List<Range> takenRanges, Map boundaries)
+    {
+        List<Range> freeRanges = new List<Range>();
+
+        if (boundaries.Left < takenRanges.First().Start)
+            freeRanges.Add(new Range(boundaries.Left, takenRanges.First().Start));
+
+        if (takenRanges.Count > 1)
+        {
+            for (int i = 1; i < takenRanges.Count; i++)
+            {
+                if (takenRanges[i - 1].End < takenRanges[i].Start)
+                    freeRanges.Add(new Range(takenRanges[i - 1].End, takenRanges[i].Start));
+            }
+
+            if (boundaries.Right > takenRanges.Last().End)
+                freeRanges.Add(new Range(boundaries.Right, takenRanges.Last().End));
+        }
+
+
+        List<int> freePositions = new List<int>();
+        foreach (Range freeRange in freeRanges)
+        {
+            for (int p = freeRange.Start + 1; p < freeRange.End; p++)
+            {
+                freePositions.Add(p);
+            }
+        }
+
+        return freePositions;
     }
 
     private static List<Range> GetOccupiedRanges(int lineToCheck, IEnumerable<Circle> circles)
@@ -44,22 +104,21 @@ class Program
         return occupiedRanges;
     }
 
-    private static void CombineRanges(List<Range> list1, List<Range> list2 = null)
+    private static void CombineRanges(List<Range> list1)
     {
         int expansions = 0;
         do
         {
-            // TODO 1 lijst op zichzelf merged lukt, maar hoe 2 lijsten naar 1? op deze manier moet list1 altijd gecleared worden.
-
-            list2 = list1.Select(r => new Range(r.Start, r.End)).ToList(); // Deep copy
+            var temp = list1.Select(r => new Range(r.Start, r.End)).ToList(); // Deep copy
             list1.Clear();
 
             expansions = 0;
 
-            foreach (Range r in list2)
+            foreach (Range r in temp)
             {
                 var containingRange = list1.FirstOrDefault(cr => (cr.Start <= r.Start && r.Start <= cr.End)
-                                                                    || (cr.Start <= r.End && r.End <= cr.End));
+                                                              || (cr.Start <= r.End && r.End <= cr.End)
+                                                              || (cr.Start >= r.Start && r.End >= cr.Start));
 
                 if (containingRange == null)
                 {
@@ -78,6 +137,8 @@ class Program
             }
         }
         while (expansions > 0);
+
+        list1 = list1.OrderBy(r => r.Start).ToList();
     }
 
     private static IEnumerable<((int, int), (int, int))> GetSensorsAndBeacons(string[] input)
@@ -144,6 +205,22 @@ class Program
         {
             Center = aCenter;
             Radius = aRadius;
+        }
+    }
+
+    public class Map
+    {
+        public int High;
+        public int Low;
+        public int Left;
+        public int Right;
+
+        public Map(int aHigh, int aLow, int aLeft, int aRight)
+        {
+            High = aHigh;
+            Low = aLow;
+            Left = aLeft;
+            Right = aRight;
         }
     }
 }
