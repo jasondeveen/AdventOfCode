@@ -1,46 +1,170 @@
 ﻿
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace day16;
 
 class Program
 {
+    static int ENDTIME = 30;
+
     static void Main(string[] args)
     {
+        // https://nickymeuleman.netlify.app/garden/aoc2022-day16#helpers
+
         string[] input = File.ReadAllLines(args[0]);
 
-        // 1. Make tree, with value=flow rate, edge=1
-        // 2. Find optimal path
+        List<Room> nodes = GetTree(input);
+        List<Room> relevantNodes = nodes.Where(n => n.FlowRate > 0).ToList();
+        Room startNode = nodes.First(n => n.Name == "AA");
 
-        /*
-            volgende valve kiezen:
-            (Tr * Fr) - d
-            Tr = Time Remaining
-            Fr = Flow Rate of selected node
-            d = distance to selected node
-        */
+        Dictionary<Room, Dictionary<Room, int>> distanceMap = GetDistanceMap(nodes);
 
-        List<Node> nodes = GetTree(input);
-        
+        int highestPressureReleased = 0;
+        int evaluatedCounter = 0;
 
+        Queue<State> q = new Queue<State>();
+        q.Enqueue(new State
+        {
+            currentRoom = startNode,
+            elapsedTime = 0,
+            openedRooms = new List<Room>(),
+            currentPressureReleased = 0,
+        });
+
+        while (q.Count > 0)
+        {
+            State currentState = q.Dequeue();
+
+            var unopenedRooms = relevantNodes.Except(currentState.openedRooms);
+
+            // if all flowing valves are opened, wait until the end
+            if (unopenedRooms.Count() == 0 || currentState.elapsedTime >= 30)
+            {
+                int relievedAtEnd = GetTotalPressure(currentState, ENDTIME);
+                highestPressureReleased = Math.Max(highestPressureReleased, relievedAtEnd);
+                continue;
+            }
+
+            // for every unopened valve, run simulation
+            foreach (var unopenedRoom in unopenedRooms)
+            {
+                // how long would moving to dest take? +1 to open the valve
+                int cost = distanceMap[currentState.currentRoom][unopenedRoom] + 1;
+                int newElapsed = currentState.elapsedTime + cost;
+
+                // if opening the dest valve would exceed the time limit, wait until the end
+                if (newElapsed >= ENDTIME)
+                {
+                    int relievedAtEnd = GetTotalPressure(currentState, ENDTIME);
+                    highestPressureReleased = Math.Max(highestPressureReleased, relievedAtEnd);
+                    continue;
+                }
+
+                // relieve pressure of opened valves while we move to dest and open it
+                int newRelieved = currentState.currentPressureReleased + (currentState.relievedPerMin * cost);
+
+                // add opened valve to opened valves
+                var newOpened = currentState.openedRooms.Select(r => r).ToList();
+                newOpened.Add(unopenedRoom);
+
+                q.Enqueue(new State
+                {
+                    currentRoom = unopenedRoom,
+                    elapsedTime = newElapsed,
+                    openedRooms = newOpened.Select(r => r).ToList(),
+                    currentPressureReleased = newRelieved
+                });
+            }
+
+
+
+            System.Console.WriteLine("States evaluated: " + ++evaluatedCounter);
+        }
+
+
+        System.Console.WriteLine($"Total pressure released: {highestPressureReleased}");
     }
 
-    private static List<Node> GetTree(string[] input)
+    private static int GetTotalPressure(State state, int maxTime)
     {
-        List<Node> nodes = new List<Node>();
+        int remainingTime = ENDTIME - state.elapsedTime;
+
+        return state.currentPressureReleased + (remainingTime * state.relievedPerMin);
+    }
+
+    private static Dictionary<Room, Dictionary<Room, int>> GetDistanceMap(List<Room> nodes)
+    {
+        Dictionary<Room, Dictionary<Room, int>> dict = new Dictionary<Room, Dictionary<Room, int>>();
+
+        foreach (Room room in nodes)
+        {
+            dict.Add(room, GetPathCosts(nodes, room));
+        }
+
+        return dict;
+    }
+
+    private static Dictionary<Room, int> GetPathCosts(List<Room> rooms, Room room)
+    {
+        Queue<Room> unseen = new Queue<Room>();
+        unseen.Enqueue(room);
+
+        List<Room> seen = new List<Room>();
+        seen.Add(room);
+
+        Dictionary<Room, Room> prevDict = new Dictionary<Room, Room>();
+
+        while (unseen.Count > 0)
+        {
+            Room current = unseen.Dequeue();
+            List<Room> neighbors = current.Neighbors.Select(n => n.Item2).ToList();
+
+            foreach (Room n in neighbors)
+            {
+                if (!seen.Contains(n))
+                {
+                    unseen.Enqueue(n);
+                    seen.Add(n);
+                    prevDict.Add(n, current);
+                }
+            }
+        }
+
+        Dictionary<Room, int> pathCosts = new Dictionary<Room, int>();
+
+        foreach (Room r in rooms.Except(new List<Room> { room }))
+        {
+            Room nextRoom = r;
+            int distance = 0;
+            while (nextRoom != room)
+            {
+                distance++;
+                nextRoom = prevDict[nextRoom];
+            }
+
+            pathCosts.Add(r, distance);
+        }
+
+        return pathCosts;
+    }
+
+    private static List<Room> GetTree(string[] input)
+    {
+        List<Room> nodes = new List<Room>();
 
         foreach (string s in input)
         {
             string name = s[6..8];
             int flowRate = int.Parse(s.Split(';')[0].Split('=')[1]);
 
-            nodes.Add(new Node(name, flowRate));
+            nodes.Add(new Room(name, flowRate));
         }
 
         foreach (string s in input)
         {
             string nodeName = s[6..8];
-            Node node = nodes.First(n => n.Name == nodeName);
+            Room node = nodes.First(n => n.Name == nodeName);
 
 
             string temp = s.Split(';')[1];
@@ -55,17 +179,32 @@ class Program
         return nodes;
     }
 
-    public class Node
+
+
+    [DebuggerDisplay("Name = {Name}")]
+    public class Room
     {
         public string Name;
         public int FlowRate;
-        public List<(int, Node)> Neighbors;
+        public bool ValveStatus;
+        public List<(int, Room)> Neighbors;
 
-        public Node(string aName, int aFlowRate)
+        public Room(string aName, int aFlowRate)
         {
             Name = aName;
             FlowRate = aFlowRate;
-            Neighbors = new List<(int, Node)>();
+            ValveStatus = false;
+            Neighbors = new List<(int, Room)>();
         }
+    }
+
+    public class State
+    {
+        public int currentPressureReleased;
+        public int elapsedTime;
+        public List<Room> openedRooms = new List<Room>();
+        public Room currentRoom;
+
+        public int relievedPerMin => openedRooms.Select(r => r.FlowRate).Sum();
     }
 }
