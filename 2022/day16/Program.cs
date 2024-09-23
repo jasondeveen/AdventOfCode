@@ -32,6 +32,12 @@ class Program
             currentPressureReleased = 0,
         });
 
+
+        HashSet<(List<Room>, int, int)> seen = new()
+        {
+            (new List<Room>(), 0, 0)
+        };
+
         while (q.Count > 0)
         {
             State currentState = q.Dequeue();
@@ -68,13 +74,16 @@ class Program
                 var newOpened = currentState.openedRooms.Select(r => r).ToList();
                 newOpened.Add(unopenedRoom);
 
-                q.Enqueue(new State
+                if (seen.Add((newOpened.Select(r => r).ToList(), newElapsed, newRelieved)))
                 {
-                    currentRoom = unopenedRoom,
-                    elapsedTime = newElapsed,
-                    openedRooms = newOpened.Select(r => r).ToList(),
-                    currentPressureReleased = newRelieved
-                });
+                    q.Enqueue(new State
+                    {
+                        currentRoom = unopenedRoom,
+                        elapsedTime = newElapsed,
+                        openedRooms = newOpened.Select(r => r).ToList(),
+                        currentPressureReleased = newRelieved
+                    });
+                }
             }
 
 
