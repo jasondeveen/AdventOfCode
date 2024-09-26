@@ -4,9 +4,27 @@ using System.Text.RegularExpressions;
 
 namespace day16;
 
+/*
+    Probleem part 2:
+        oplossing path: 
+            ik: A - J - B - C
+            e : A - D - H - E
+            1707
+        
+        mijn path:
+            ik: A - B - J - C
+            e : A - D - H - E
+            1705
+        
+        suboptimaal resultaat...
+
+        het moet zijn dat mijn algo het oplossing pad niet ziet, anders zou deze gekozen zijn als winnaar.
+        wrm ziet mijn algo het oplossing pad niet?
+*/
+
 class Program
 {
-    static int ENDTIME = 30;
+    static int ENDTIME = 26;
 
     static void Main(string[] args)
     {
@@ -18,20 +36,24 @@ class Program
         List<Room> relevantNodes = nodes.Where(n => n.FlowRate > 0).ToList();
         Room startNode = nodes.First(n => n.Name == "AA");
 
-        Dictionary<Room, Dictionary<Room, int>> distanceMap = GetDistanceMap(nodes);
+        Dictionary<Room, Dictionary<Room, Room>> paths = GetPaths(nodes);
+        Dictionary<Room, Dictionary<Room, int>> distanceMap = GetDistanceMap(nodes, paths);
 
         int highestPressureReleased = 0;
         int evaluatedCounter = 0;
+        State winningState = null;
 
         Queue<State> q = new Queue<State>();
         q.Enqueue(new State
         {
             currentRoom = startNode,
+            elephantCurrentRoom = startNode,
             elapsedTime = 0,
             openedRooms = new List<Room>(),
             currentPressureReleased = 0,
         });
 
+        int seenHits = 0;
 
         HashSet<(List<Room>, int, int)> seen = new()
         {
@@ -42,57 +64,98 @@ class Program
         {
             State currentState = q.Dequeue();
 
-            var unopenedRooms = relevantNodes.Except(currentState.openedRooms);
+            var unopenedRelevantRooms = relevantNodes.Except(currentState.openedRooms);
 
             // if all flowing valves are opened, wait until the end
-            if (unopenedRooms.Count() == 0 || currentState.elapsedTime >= 30)
+            if (unopenedRelevantRooms.Count() == 0 || currentState.elapsedTime >= ENDTIME)
             {
                 int relievedAtEnd = GetTotalPressure(currentState, ENDTIME);
-                highestPressureReleased = Math.Max(highestPressureReleased, relievedAtEnd);
+                if (relievedAtEnd > highestPressureReleased)
+                {
+                    highestPressureReleased = relievedAtEnd;
+                    winningState = currentState;
+                }
+                // highestPressureReleased = Math.Max(highestPressureReleased, relievedAtEnd);
                 continue;
             }
 
-            // for every unopened valve, run simulation
-            foreach (var unopenedRoom in unopenedRooms)
+
+            foreach (var unopenedRoom in unopenedRelevantRooms)
             {
-                // how long would moving to dest take? +1 to open the valve
-                int cost = distanceMap[currentState.currentRoom][unopenedRoom] + 1;
-                int newElapsed = currentState.elapsedTime + cost;
-
-                // if opening the dest valve would exceed the time limit, wait until the end
-                if (newElapsed >= ENDTIME)
+                foreach (var elephantUnopenedRoom in unopenedRelevantRooms.Except(new List<Room> { unopenedRoom }))
                 {
-                    int relievedAtEnd = GetTotalPressure(currentState, ENDTIME);
-                    highestPressureReleased = Math.Max(highestPressureReleased, relievedAtEnd);
-                    continue;
-                }
+                    int cost = distanceMap[currentState.currentRoom][unopenedRoom] + 1;
+                    int elephantCost = distanceMap[currentState.elephantCurrentRoom][elephantUnopenedRoom] + 1;
+                    int newElapsed = currentState.elapsedTime + Math.Min(cost, elephantCost);
 
-                // relieve pressure of opened valves while we move to dest and open it
-                int newRelieved = currentState.currentPressureReleased + (currentState.relievedPerMin * cost);
+                    // if opening the dest valve would exceed the time limit, wait until the end
+                    if (newElapsed >= ENDTIME)
+                    {
+                        int relievedAtEnd = GetTotalPressure(currentState, ENDTIME);
+                        if (relievedAtEnd > highestPressureReleased)
+                        {
+                            highestPressureReleased = relievedAtEnd;
+                            winningState = currentState;
+                        }
+                        // highestPressureReleased = Math.Max(highestPressureReleased, relievedAtEnd);
+                        continue;
+                    }
 
-                // add opened valve to opened valves
-                var newOpened = currentState.openedRooms.Select(r => r).ToList();
-                newOpened.Add(unopenedRoom);
+                    // relieve pressure of opened valves while we move to dest and open it
+                    int newRelieved = currentState.currentPressureReleased + (currentState.relievedPerMin * Math.Min(cost, elephantCost));
 
-                if (seen.Add((newOpened.Select(r => r).ToList(), newElapsed, newRelieved)))
-                {
+                    // add opened valve to opened valves and determine new current position of me and elephant
+                    var newOpened = currentState.openedRooms.Select(r => r).ToList();
+                    Room newCurrentRoom;
+                    Room newElephantCurrentRoom;
+                    if (cost < elephantCost)
+                    {
+                        // i win -> my curr pos = newly opened room, elephant pos = (cost) steps towards elephantUnopenedRoom
+                        newOpened.Add(unopenedRoom);
+                        newCurrentRoom = unopenedRoom;
+                        newElephantCurrentRoom = TakeStepsTowards(paths, currentState.elephantCurrentRoom, elephantUnopenedRoom, cost);
+                    }
+                    else if (cost > elephantCost)
+                    {
+                        // elephant wins -> e's curr pos = e newly opened room, my pos = (cost) steps towards unopenedRoom
+                        newOpened.Add(elephantUnopenedRoom);
+                        newElephantCurrentRoom = elephantUnopenedRoom;
+                        newCurrentRoom = TakeStepsTowards(paths, currentState.currentRoom, unopenedRoom, elephantCost);
+                    }
+                    else
+                    {
+                        // draw -> both positions are the newly opened rooms (the good ending)
+                        newOpened.Add(unopenedRoom);
+                        newOpened.Add(elephantUnopenedRoom);
+                        newCurrentRoom = unopenedRoom;
+                        newElephantCurrentRoom = elephantUnopenedRoom;
+                    }
+
+
+                    // if (seen.Add((newOpened.Select(r => r).ToList(), newElapsed, newRelieved)))
+                    // {
+                    List<State> newHistory = new List<State> { currentState };
+                    newHistory.AddRange(currentState.history);
                     q.Enqueue(new State
                     {
-                        currentRoom = unopenedRoom,
+                        currentRoom = newCurrentRoom,
+                        elephantCurrentRoom = newElephantCurrentRoom,
                         elapsedTime = newElapsed,
                         openedRooms = newOpened.Select(r => r).ToList(),
-                        currentPressureReleased = newRelieved
+                        currentPressureReleased = newRelieved,
+                        history = newHistory
                     });
+                    // }
+                    // else
+                    //     seenHits++;
                 }
             }
-
-
 
             System.Console.WriteLine("States evaluated: " + ++evaluatedCounter);
         }
 
-
         System.Console.WriteLine($"Total pressure released: {highestPressureReleased}");
+        System.Console.WriteLine(seenHits);
     }
 
     private static int GetTotalPressure(State state, int maxTime)
@@ -102,57 +165,65 @@ class Program
         return state.currentPressureReleased + (remainingTime * state.relievedPerMin);
     }
 
-    private static Dictionary<Room, Dictionary<Room, int>> GetDistanceMap(List<Room> nodes)
+    private static Dictionary<Room, Dictionary<Room, Room>> GetPaths(List<Room> rooms)
     {
-        Dictionary<Room, Dictionary<Room, int>> dict = new Dictionary<Room, Dictionary<Room, int>>();
+        Dictionary<Room, Dictionary<Room, Room>> paths = new();
 
-        foreach (Room room in nodes)
+        foreach (Room room in rooms)
         {
-            dict.Add(room, GetPathCosts(nodes, room));
-        }
+            Queue<Room> unseen = new Queue<Room>();
+            unseen.Enqueue(room);
 
-        return dict;
-    }
+            List<Room> seen = new List<Room>();
+            seen.Add(room);
 
-    private static Dictionary<Room, int> GetPathCosts(List<Room> rooms, Room room)
-    {
-        Queue<Room> unseen = new Queue<Room>();
-        unseen.Enqueue(room);
+            Dictionary<Room, Room> pathsForRoom = new Dictionary<Room, Room>();
 
-        List<Room> seen = new List<Room>();
-        seen.Add(room);
-
-        Dictionary<Room, Room> prevDict = new Dictionary<Room, Room>();
-
-        while (unseen.Count > 0)
-        {
-            Room current = unseen.Dequeue();
-            List<Room> neighbors = current.Neighbors.Select(n => n.Item2).ToList();
-
-            foreach (Room n in neighbors)
+            while (unseen.Count > 0)
             {
-                if (!seen.Contains(n))
+                Room current = unseen.Dequeue();
+                List<Room> neighbors = current.Neighbors.Select(n => n.Item2).ToList();
+
+                foreach (Room n in neighbors)
                 {
-                    unseen.Enqueue(n);
-                    seen.Add(n);
-                    prevDict.Add(n, current);
+                    if (!seen.Contains(n))
+                    {
+                        unseen.Enqueue(n);
+                        seen.Add(n);
+                        pathsForRoom.Add(n, current);
+                    }
                 }
             }
+
+            paths.Add(room, pathsForRoom);
         }
+        return paths;
+    }
 
-        Dictionary<Room, int> pathCosts = new Dictionary<Room, int>();
+    private static Dictionary<Room, Dictionary<Room, int>> GetDistanceMap(List<Room> rooms, Dictionary<Room, Dictionary<Room, Room>> paths)
+    {
+        Dictionary<Room, Dictionary<Room, int>> pathCosts = new();
 
-        foreach (Room r in rooms.Except(new List<Room> { room }))
+        foreach (Room room in rooms)
         {
-            Room nextRoom = r;
-            int distance = 0;
-            while (nextRoom != room)
+            Dictionary<Room, int> pathCostsForRoom = new Dictionary<Room, int>();
+
+            foreach (Room r in rooms.Except(new List<Room> { room }))
             {
-                distance++;
-                nextRoom = prevDict[nextRoom];
+                Room nextRoom = r;
+                int distance = 0;
+                while (nextRoom != room)
+                {
+                    distance++;
+                    nextRoom = paths[room][nextRoom];
+                }
+
+                pathCostsForRoom.Add(r, distance);
             }
 
-            pathCosts.Add(r, distance);
+            pathCostsForRoom.Add(room, 0);
+
+            pathCosts.Add(room, pathCostsForRoom);
         }
 
         return pathCosts;
@@ -188,7 +259,18 @@ class Program
         return nodes;
     }
 
+    private static Room TakeStepsTowards(Dictionary<Room, Dictionary<Room, Room>> paths, Room startRoom, Room destRoom, int steps)
+    {
+        Room currRoom = startRoom;
 
+        while (steps > 0)
+        {
+            currRoom = paths[destRoom][currRoom];
+            steps--;
+        }
+
+        return currRoom;
+    }
 
     [DebuggerDisplay("Name = {Name}")]
     public class Room
@@ -213,7 +295,45 @@ class Program
         public int elapsedTime;
         public List<Room> openedRooms = new List<Room>();
         public Room currentRoom;
+        public Room elephantCurrentRoom;
 
         public int relievedPerMin => openedRooms.Select(r => r.FlowRate).Sum();
+
+        public List<State> history = new();
     }
 }
+
+
+
+
+/*
+// how long would moving to dest take? +1 to open the valve
+                    int cost = distanceMap[currentState.currentRoom][unopenedRoom] + 1;
+                    int newElapsed = currentState.elapsedTime + cost;
+
+                    // if opening the dest valve would exceed the time limit, wait until the end
+                    if (newElapsed >= ENDTIME)
+                    {
+                        int relievedAtEnd = GetTotalPressure(currentState, ENDTIME);
+                        highestPressureReleased = Math.Max(highestPressureReleased, relievedAtEnd);
+                        continue;
+                    }
+
+                    // relieve pressure of opened valves while we move to dest and open it
+                    int newRelieved = currentState.currentPressureReleased + (currentState.relievedPerMin * cost);
+
+                    // add opened valve to opened valves
+                    var newOpened = currentState.openedRooms.Select(r => r).ToList();
+                    newOpened.Add(unopenedRoom);
+
+                    if (seen.Add((newOpened.Select(r => r).ToList(), newElapsed, newRelieved)))
+                    {
+                        q.Enqueue(new State
+                        {
+                            currentRoom = unopenedRoom,
+                            elephantCurrentRoom = elephantUnopenedRoom,
+                            elapsedTime = newElapsed,
+                            openedRooms = newOpened.Select(r => r).ToList(),
+                            currentPressureReleased = newRelieved
+                        });
+                    }*/
