@@ -11,14 +11,55 @@ class Program
     static int ENDTIME = 26;
     static Room dummyRoom = new Room("dummy", 0);
 
+    static int seenHits = 0;
+    static object seenHitsLock = new object();
+    static int SeenHits
+    {
+        get { return seenHits; }
+        set { 
+            lock(seenHitsLock)
+            {
+                seenHits = value;
+            }
+        }
+    }
+
+    static int evaluatedCounter = 0;
+    static object evaluatedCounterLock = new object();
+    static int EvaluatedCounter
+    {
+        get { return evaluatedCounter; }
+        set
+        {
+            lock (evaluatedCounterLock)
+            {
+                evaluatedCounter = value;
+            }
+        }
+    }
+
+    static int highestpressurereleased = 0;
+    static object highestpressurereleasedLock = new object();
+    static int Highestpressurereleased
+    {
+        get { return highestpressurereleased; }
+        set
+        {
+            lock (highestpressurereleasedLock)
+            {
+                highestpressurereleased = value;
+            }
+        }
+    }
+
     static void Main(string[] args)
     {
         // https://nickymeuleman.netlify.app/garden/aoc2022-day16#helpers
 
         string[] input = File.ReadAllLines(args[0]);
 
-        List<Room> nodes = GetTree(input);
-        List<Room> relevantNodes = nodes.Where(n => n.FlowRate > 0).ToList();
+        IReadOnlyList<Room> nodes = GetTree(input);
+        IReadOnlyList<Room> relevantNodes = nodes.Where(n => n.FlowRate > 0).ToList();
         Room startNode = nodes.First(n => n.Name == "AA");
 
         Dictionary<Room, Dictionary<Room, Room>> paths = GetPaths(nodes);
@@ -27,7 +68,7 @@ class Program
         int highestPressureReleased = 0;
         int evaluatedCounter = 0;
 
-        Queue<State> q = new Queue<State>();
+        ConcurrentQueue<State> q = new ConcurrentQueue<State>();
         q.Enqueue(new State
         {
             currentRoom = startNode,
@@ -37,16 +78,16 @@ class Program
             currentPressureReleased = 0,
         });
 
-        int seenHits = 0;
 
-        HashSet<(List<Room>, int, int, string)> seen = new(new CustomStateComparer());
-
+        ConcurrentSeenStateHashSet seen = ConcurrentSeenStateHashSet.Instance;
 
 
 
+        ThreadPool.SetMaxThreads(20, 20);
         while (q.Count > 0)
         {
-            
+        https://medium.com/devtechblogs/overview-of-c-async-programming-with-thread-pools-and-task-parallel-library-7b18c9fc192d
+            ThreadPool.QueueUserWorkItem(Task.Run(() => EvaluateState(q, relevantNodes, distanceMap, paths))
         }
 
         System.Console.WriteLine($"Total pressure released: {highestPressureReleased}");
@@ -59,9 +100,9 @@ class Program
     /// async functie, moet q, seen, seenhits, evaluatedcounter, highestpressurereleased delen
     /// relevantnodes, distancemap, paths w gebruikt en moeten const zijn
     /// </summary>
-    private void EvaluateState()
+    private static void EvaluateState(ConcurrentQueue<State> q, IReadOnlyList<Room> relevantNodes, Dictionary<Room, Dictionary<Room, int>> distanceMap, Dictionary<Room, Dictionary<Room, Room>> paths)
     {
-        State currentState = q.Dequeue();
+        q.TryDequeue(out State currentState);
 
         var unopenedRelevantRooms = relevantNodes.Except(currentState.openedRooms);
 
@@ -69,8 +110,8 @@ class Program
         if (unopenedRelevantRooms.Count() == 0 || currentState.elapsedTime >= ENDTIME)
         {
             int relievedAtEnd = GetTotalPressure(currentState);
-            highestPressureReleased = Math.Max(highestPressureReleased, relievedAtEnd);
-            continue;
+            HighestPressureReleased = Math.Max(HighestPressureReleased, relievedAtEnd);
+            return;
         }
 
         if (unopenedRelevantRooms.Count() == 1)
@@ -122,8 +163,14 @@ class Program
                     newElephantCurrentRoom = elephantUnopenedRoom;
                 }
 
-
-                if (seen.Add((newOpened.Select(r => r).ToList(), newElapsed, newRelieved, MergeRooms(newCurrentRoom, newElephantCurrentRoom))))
+                SeenState seenState = new SeenState
+                {
+                    OpenedRooms = newOpened,
+                    Relieved = newRelieved,
+                    RoomsOccupied = MergeRooms(newCurrentRoom, newElephantCurrentRoom),
+                    TimeElapsed = newElapsed
+                };
+                if (ConcurrentSeenStateHashSet.Instance.Add(seenState))
                 {
                     q.Enqueue(new State
                     {
@@ -142,6 +189,7 @@ class Program
         System.Console.WriteLine("States evaluated: " + ++evaluatedCounter);
     }
 
+    #region helpers
     private static int GetTotalPressure(State state)
     {
         int remainingTime = ENDTIME - state.elapsedTime;
@@ -149,7 +197,7 @@ class Program
         return state.currentPressureReleased + (remainingTime * state.relievedPerMin);
     }
 
-    private static Dictionary<Room, Dictionary<Room, Room>> GetPaths(List<Room> rooms)
+    private static Dictionary<Room, Dictionary<Room, Room>> GetPaths(IReadOnlyList<Room> rooms)
     {
         Dictionary<Room, Dictionary<Room, Room>> paths = new();
 
@@ -184,7 +232,7 @@ class Program
         return paths;
     }
 
-    private static Dictionary<Room, Dictionary<Room, int>> GetDistanceMap(List<Room> rooms, Dictionary<Room, Dictionary<Room, Room>> paths)
+    private static Dictionary<Room, Dictionary<Room, int>> GetDistanceMap(IReadOnlyList<Room> rooms, Dictionary<Room, Dictionary<Room, Room>> paths)
     {
         Dictionary<Room, Dictionary<Room, int>> pathCosts = new();
 
@@ -266,6 +314,8 @@ class Program
         return string.Join("", (a.Name[0].ToString() + b.Name[1].ToString()).OrderBy(c => c));
     }
 
+    #endregion
+
     [DebuggerDisplay("Name = {Name}")]
     public class Room
     {
@@ -302,7 +352,7 @@ class Program
         public string RoomsOccupied;
     }
 
-    public class CustomStateComparer : IEqualityComparer<SeenState>
+    public class CustomSeenStateComparer : IEqualityComparer<SeenState>
     {
         bool IEqualityComparer<SeenState>.Equals(SeenState x, SeenState y)
         {
@@ -326,9 +376,30 @@ class Program
         }
     }
 
-    public class ConcurrentHashSet
+    public class ConcurrentSeenStateHashSet
     {
-        ConcurrentDictionary<(), byte>
+        private static ConcurrentSeenStateHashSet instance = null;
+        public static ConcurrentSeenStateHashSet Instance
+        {
+            get
+            {
+                if(instance == null)
+                    instance = new ConcurrentSeenStateHashSet();
+
+                return instance;
+            }
+        }
+
+        ConcurrentDictionary<SeenState, byte> _dict = new ConcurrentDictionary<SeenState, byte>();
+        
+        private ConcurrentSeenStateHashSet() {
+            _dict = new ConcurrentDictionary<SeenState, byte>(new CustomSeenStateComparer());
+        }
+
+        public bool Add(SeenState inputS)
+        {
+            return _dict.TryAdd(inputS, byte.MinValue);
+        }
     }
 }
 
