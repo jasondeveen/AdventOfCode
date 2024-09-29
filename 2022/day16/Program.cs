@@ -38,25 +38,26 @@ class Program
         }
     }
 
-    static int highestpressurereleased = 0;
-    static object highestpressurereleasedLock = new object();
-    static int Highestpressurereleased
+    private static int highestPressureReleased = 0;
+    static object highestPressureReleasedLock = new object();
+    static int HighestPressureReleased
     {
-        get { return highestpressurereleased; }
+        get { return highestPressureReleased; }
         set
         {
-            lock (highestpressurereleasedLock)
+            lock (highestPressureReleasedLock)
             {
-                highestpressurereleased = value;
+                highestPressureReleased = value;
             }
         }
     }
 
-    static void Main(string[] args)
+    static async Task Main(string[] args)
     {
         // https://nickymeuleman.netlify.app/garden/aoc2022-day16#helpers
 
         string[] input = File.ReadAllLines(args[0]);
+        int nbOfThreads = int.Parse(args[1]);
 
         IReadOnlyList<Room> nodes = GetTree(input);
         IReadOnlyList<Room> relevantNodes = nodes.Where(n => n.FlowRate > 0).ToList();
@@ -79,19 +80,33 @@ class Program
         });
 
 
-        ConcurrentSeenStateHashSet seen = ConcurrentSeenStateHashSet.Instance;
-
-
-
-        ThreadPool.SetMaxThreads(20, 20);
-        while (q.Count > 0)
+        ThreadPool.SetMaxThreads(nbOfThreads, nbOfThreads);
+        using (CountdownEvent cde = new CountdownEvent(1))
         {
-        https://medium.com/devtechblogs/overview-of-c-async-programming-with-thread-pools-and-task-parallel-library-7b18c9fc192d
-            ThreadPool.QueueUserWorkItem(Task.Run(() => EvaluateState(q, relevantNodes, distanceMap, paths))
+            while (q.Count > 0 )
+            {
+                //https://medium.com/devtechblogs/overview-of-c-async-programming-with-thread-pools-and-task-parallel-library-7b18c9fc192d
+                q.TryDequeue(out var currentState);
+                if (currentState != null)
+                {
+                    cde.AddCount();
+                    ThreadPool.QueueUserWorkItem(cb => EvaluateState(q, currentState, relevantNodes, distanceMap, paths, cde));
+                }
+
+                if (q.Count == 0)
+                {
+                    Console.WriteLine("letting q fill up for 1 sec...");
+                    await Task.Delay(100);
+                }
+            }
+
+            cde.Signal(); // because cde starts at 1, we need to decrement once
+            cde.Wait();
         }
 
-        System.Console.WriteLine($"Total pressure released: {highestPressureReleased}");
-        System.Console.WriteLine(seenHits);
+
+        System.Console.WriteLine($"Total pressure released: {HighestPressureReleased}");
+        System.Console.WriteLine(SeenHits);
 
         Console.ReadLine();
     }
@@ -100,17 +115,20 @@ class Program
     /// async functie, moet q, seen, seenhits, evaluatedcounter, highestpressurereleased delen
     /// relevantnodes, distancemap, paths w gebruikt en moeten const zijn
     /// </summary>
-    private static void EvaluateState(ConcurrentQueue<State> q, IReadOnlyList<Room> relevantNodes, Dictionary<Room, Dictionary<Room, int>> distanceMap, Dictionary<Room, Dictionary<Room, Room>> paths)
+    private static void EvaluateState(ConcurrentQueue<State> q, State currentState, IReadOnlyList<Room> relevantNodes, Dictionary<Room, Dictionary<Room, int>> distanceMap, Dictionary<Room, Dictionary<Room, Room>> paths
+        , CountdownEvent cde)
     {
-        q.TryDequeue(out State currentState);
-
         var unopenedRelevantRooms = relevantNodes.Except(currentState.openedRooms);
 
         // if all flowing valves are opened, wait until the end
         if (unopenedRelevantRooms.Count() == 0 || currentState.elapsedTime >= ENDTIME)
         {
             int relievedAtEnd = GetTotalPressure(currentState);
-            HighestPressureReleased = Math.Max(HighestPressureReleased, relievedAtEnd);
+            lock(highestPressureReleasedLock)
+            {
+                HighestPressureReleased = Math.Max(HighestPressureReleased, relievedAtEnd);
+            }
+            cde.Signal();
             return;
         }
 
@@ -129,7 +147,10 @@ class Program
                 if (newElapsed >= ENDTIME)
                 {
                     int relievedAtEnd = GetTotalPressure(currentState);
-                    highestPressureReleased = Math.Max(highestPressureReleased, relievedAtEnd);
+                    lock (highestPressureReleasedLock)
+                    {
+                        HighestPressureReleased = Math.Max(HighestPressureReleased, relievedAtEnd);
+                    }
                     continue;
                 }
 
@@ -182,11 +203,12 @@ class Program
                     });
                 }
                 else
-                    seenHits++;
+                    SeenHits++;
             }
         }
 
-        System.Console.WriteLine("States evaluated: " + ++evaluatedCounter);
+        cde.Signal();
+        System.Console.WriteLine($"States evaluated by thread {Thread.CurrentThread.ManagedThreadId}: " + ++EvaluatedCounter);
     }
 
     #region helpers
