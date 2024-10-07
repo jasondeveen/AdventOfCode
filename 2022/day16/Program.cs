@@ -6,7 +6,7 @@ namespace day16;
 
 class Program
 {
-    static int ENDTIME = 30;
+    static int ENDTIME = 26;
 
     static void Main(string[] args)
     {
@@ -22,6 +22,7 @@ class Program
 
         int highestPressureReleased = 0;
         int evaluatedCounter = 0;
+        int seenHits = 0;
 
         Queue<State> q = new Queue<State>();
         q.Enqueue(new State
@@ -32,15 +33,19 @@ class Program
             currentPressureReleased = 0,
         });
 
+        HashSet<SeenState> seen = new(new CustomSeenStateComparer());
 
-        HashSet<(List<Room>, int, int)> seen = new()
-        {
-            (new List<Room>(), 0, 0)
-        };
+        Dictionary<List<Room>, int> highestRewardPerSetOfValves = new(new CustomStateListComparer());
 
         while (q.Count > 0)
         {
             State currentState = q.Dequeue();
+
+            int totalPressure = GetTotalPressure(currentState, ENDTIME);
+            List<Room> key = currentState.openedRooms.OrderBy(r => r.Name).ToList();
+            //if(key.Any())
+            if (!highestRewardPerSetOfValves.TryAdd(key, totalPressure) && highestRewardPerSetOfValves[key] < totalPressure)
+                highestRewardPerSetOfValves[key] = totalPressure;
 
             var unopenedRooms = relevantNodes.Except(currentState.openedRooms);
 
@@ -74,7 +79,14 @@ class Program
                 var newOpened = currentState.openedRooms.Select(r => r).ToList();
                 newOpened.Add(unopenedRoom);
 
-                if (seen.Add((newOpened.Select(r => r).ToList(), newElapsed, newRelieved)))
+                var seenstate = new SeenState
+                {
+                    OpenedRooms = newOpened,
+                    TimeElapsed = newElapsed,
+                    Relieved = newRelieved
+                };
+
+                if (seen.Add(seenstate))
                 {
                     q.Enqueue(new State
                     {
@@ -84,6 +96,8 @@ class Program
                         currentPressureReleased = newRelieved
                     });
                 }
+                else
+                    seenHits++;
             }
 
 
@@ -91,10 +105,30 @@ class Program
             System.Console.WriteLine("States evaluated: " + ++evaluatedCounter);
         }
 
+        System.Console.WriteLine($"P1: Total pressure released: {highestPressureReleased}");
+        Console.WriteLine($"seenhits: {seenHits}");
 
-        System.Console.WriteLine($"Total pressure released: {highestPressureReleased}");
+
+        var results = GetPermutations(highestRewardPerSetOfValves.Keys.ToList())
+            .Select(tuple => new { roomsets = tuple, reward = highestRewardPerSetOfValves[tuple.Item1] + highestRewardPerSetOfValves[tuple.Item2] })
+            //.Max(i => i.reward);
+            .OrderBy(i => i.reward) 
+            .ToList();
+
+        //int DDEEHHReward = highestRewardPerSetOfValves
+        //    .First(kv => kv.Key.Any(k => k.Name == "DD") && kv.Key.Any(k => k.Name == "EE") && kv.Key.Any(k => k.Name == "HH") && kv.Key.Count() == 3)
+        //    .Value;
+
+        //int BBCCJJReward = highestRewardPerSetOfValves
+        //    .First(kv => kv.Key.Any(k => k.Name == "BB") && kv.Key.Any(k => k.Name == "CC") && kv.Key.Any(k => k.Name == "JJ") && kv.Key.Count() == 3)
+        //    .Value;
+
+
+        Console.WriteLine();
+        Console.WriteLine($"Max possible reward with 2 players: {results.Last().reward}");
     }
 
+    #region helpers
     private static int GetTotalPressure(State state, int maxTime)
     {
         int remainingTime = ENDTIME - state.elapsedTime;
@@ -188,6 +222,17 @@ class Program
         return nodes;
     }
 
+    private static IEnumerable<(List<Room>, List<Room>)> GetPermutations(List<List<Room>> roomSets)
+    {
+        foreach (var roomSet1 in roomSets)
+        {
+            foreach (var roomSet2 in roomSets.Where(rs => rs.Intersect(roomSet1).Count() == 0))
+            {
+                yield return (roomSet1, roomSet2);
+            }
+        }
+    }
+    #endregion
 
 
     [DebuggerDisplay("Name = {Name}")]
@@ -215,5 +260,70 @@ class Program
         public Room currentRoom;
 
         public int relievedPerMin => openedRooms.Select(r => r.FlowRate).Sum();
+    }
+    
+    [DebuggerDisplay("{DebuggerDisplay}")]
+    public class SeenState
+    {
+        private List<Room> openedRooms = new List<Room>();
+        public List<Room> OpenedRooms {
+            get => openedRooms;
+            set
+            {
+                openedRooms = value.OrderBy(r => r.Name).ToList();
+            }
+        }
+        public int TimeElapsed;
+        public int Relieved;
+
+        private string DebuggerDisplay
+        {
+            get
+            {
+                return $"OpenedRooms: {string.Join(",", OpenedRooms.Select(r => r.Name))}, TimeElapsed: {TimeElapsed}, Relieved: {Relieved}";
+            }
+        }
+    }
+
+    public class CustomSeenStateComparer : IEqualityComparer<SeenState>
+    {
+        bool IEqualityComparer<SeenState>.Equals(SeenState x, SeenState y)
+        {
+            if (x.TimeElapsed != y.TimeElapsed) return false;
+            if (x.Relieved != y.Relieved) return false;
+
+            if (x.OpenedRooms.Count != y.OpenedRooms.Count) return false;
+            for (int i = 0; i < x.OpenedRooms.Count; i++)
+            {
+                if (x.OpenedRooms[i].Name != y.OpenedRooms[i].Name)
+                    return false;
+            }
+
+            return true;
+        }
+
+        int IEqualityComparer<SeenState>.GetHashCode(SeenState obj)
+        {
+            return $"{string.Join(",", obj.OpenedRooms.Select(i => i.Name))},{obj.TimeElapsed},{obj.Relieved}".GetHashCode();
+        }
+    }
+
+    public class CustomStateListComparer : IEqualityComparer<List<Room>>
+    {
+        bool IEqualityComparer<List<Room>>.Equals(List<Room>? x, List<Room>? y)
+        {
+            if(x.Count != y.Count) return false;
+            for(int i = 0; i < x.Count; i++)
+            {
+                if (x[i] != y[i]) return false;
+            }
+
+            return true;
+        }
+
+        int IEqualityComparer<List<Room>>.GetHashCode(List<Room> obj)
+        {
+            return $"{string.Join(",", obj.Select(i => i.Name))}".GetHashCode();
+        }
     }
 }
