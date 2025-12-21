@@ -1,6 +1,8 @@
 use std::time::SystemTime;
 use std::{env, fs};
 
+static PART2: bool = true;
+
 #[derive(Debug)]
 struct Range {
     start: u64,
@@ -41,12 +43,33 @@ fn detect_invalids(range: Range) -> u64 {
 
 fn is_number_invalid(num: u64) -> bool {
     let s = num.to_string();
-    if s.len() % 2 == 0 {
-        let first_half = &s[..s.len() / 2];
-        let second_half = &s[s.len() / 2..];
 
-        if first_half == second_half {
-            return true;
+    if !PART2 {
+        if s.len() % 2 == 0 {
+            let first_half = &s[..s.len() / 2];
+            let second_half = &s[s.len() / 2..];
+
+            if first_half == second_half {
+                return true;
+            }
+        }
+    } else {
+        for group_size in 1..(s.len() / 2) + 1 {
+            if s.len() % group_size == 0 {
+                let mut c = 0;
+                let current_group = &s[c * group_size..(c + 1) * group_size];
+                let mut next_group = "";
+                while (c + 2) * group_size <= s.len() {
+                    next_group = &s[(c + 1) * group_size..(c + 2) * group_size];
+                    if current_group != next_group {
+                        break;
+                    }
+                    c += 1;
+                }
+                if current_group == next_group {
+                    return true;
+                }
+            }
         }
     }
 
