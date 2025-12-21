@@ -73,3 +73,19 @@ fn parse_range(range_str: &str) -> Range {
         end: end,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_number_invalid() {
+        let test_cases = vec![
+            11, 22, 111, 1010, 222222, 824824824, 38593859, 1188511885, 112112,
+        ];
+
+        for test_number in test_cases {
+            assert!(is_number_invalid(test_number), "FAIL: {test_number}");
+        }
+    }
+}
