@@ -55,41 +55,18 @@ fn is_number_invalid(num: u64) -> bool {
 
 fn parse_range(range_str: &str) -> Range {
     let chunks: Vec<&str> = range_str.split('-').collect();
-    let start_str = chunks.get(0);
-    let end_str = chunks.get(1);
-
-    let start: u64;
-    let end: u64;
-
-    match start_str {
-        None => panic!("start of range not valid: {}", range_str),
-        Some(s) => {
-            let temp_start = s.trim().parse::<u64>();
-            match temp_start {
-                Err(error) => panic!("Parsing went wrong! start: {s} {error}"),
-                Ok(s) => {
-                    start = s;
-                    ()
-                }
-            }
-            ()
-        }
-    }
-
-    match end_str {
-        None => panic!("end of range not valid: {}", range_str),
-        Some(e) => {
-            let temp_end = e.trim().parse::<u64>();
-            match temp_end {
-                Err(error) => panic!("Parsing went wrong! end: {e} {error}"),
-                Ok(e) => {
-                    end = e;
-                    ()
-                }
-            }
-            ()
-        }
-    }
+    let start = chunks
+        .get(0)
+        .expect("No second part of the range (start): {range_str}")
+        .trim()
+        .parse::<u64>()
+        .expect("start part of range is not a number: {range_str}");
+    let end = chunks
+        .get(1)
+        .expect("No second part of the range (end): {range_str}")
+        .trim()
+        .parse::<u64>()
+        .expect("End part of range is not a number: {range_str}");
 
     Range {
         start: start,
