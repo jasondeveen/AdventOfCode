@@ -26,6 +26,11 @@ fn get_max_joltage(line: &str, battery_length: u8) -> u64 {
 
     for i in 0..battery_length {
         let offset = i + amount_skipped;
+
+        if window_size == 1 {
+            result += (&line[offset as usize..]).parse::<u64>().unwrap();
+        }
+
         let (index, largest_number_in_window) =
             get_largest_number(&line[offset as usize..(offset + window_size) as usize]);
 
