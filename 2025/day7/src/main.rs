@@ -1,3 +1,4 @@
+use std::collections;
 use std::{fs, time::SystemTime};
 
 mod map;
@@ -13,17 +14,25 @@ fn main() {
 
     let map = Map::new(raw_input.lines().collect());
     let start_point = map.get_start_point();
+    let mut paths = collections::HashMap::new();
 
     let total_breaks = map.check_path(
         Point {
             x: start_point,
             y: 0,
         },
+        &mut paths,
         &mut Vec::new(),
     );
 
     println!("{:?}", now.elapsed().unwrap());
     println!("Total beam breaks = {}", total_breaks);
+
+    for entry in paths {
+        if entry.1 > 0 {
+            println!("{:?}: {}", entry.0, entry.1);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -39,7 +48,11 @@ mod tests {
         )];
 
         for (start_point, map, expected_breaks) in test_cases {
-            let real_breaks = map.check_path(start_point, &mut Vec::new());
+            let real_breaks = map.check_path(
+                start_point,
+                &mut collections::HashMap::new(),
+                &mut Vec::new(),
+            );
             assert_eq!(real_breaks, expected_breaks);
         }
     }

@@ -52,7 +52,8 @@ impl<'a> Map<'a> {
     pub(crate) fn check_path(
         &self,
         start_point: Point,
-        check_start_points: &mut Vec<Point>,
+        paths_from_here: &mut std::collections::HashMap<Point, u32>,
+        checked_start_points: &mut Vec<Point>,
     ) -> u32 {
         let mut i = 0;
         while start_point.y + i < self.max_height {
@@ -61,10 +62,10 @@ impl<'a> Map<'a> {
                 y: start_point.y + i,
             };
 
-            if check_start_points.contains(&evaluated_point) {
+            if paths_from_here.contains_key(&evaluated_point) {
                 return 0;
             }
-            check_start_points.push(evaluated_point.clone());
+            paths_from_here.insert(evaluated_point.clone(), 0);
 
             let val = match self.coor(&evaluated_point) {
                 Some(val) => val,
@@ -76,48 +77,37 @@ impl<'a> Map<'a> {
                 continue;
             }
 
-            let left_val = if start_point.x > 0 {
-                let left_point = Point {
-                    x: evaluated_point.x - 1,
-                    ..evaluated_point
-                };
-                self.coor(&left_point)
-                    .filter(|c| *c != '^')
-                    .map(|_| {
-                        self.check_path(
-                            Point {
-                                x: evaluated_point.x - 1,
-                                y: evaluated_point.y,
-                            },
-                            check_start_points,
-                        )
-                    })
-                    .unwrap_or_default()
-            } else {
-                0
+            let mut descendants_value: u32 = 0;
+            let left_point = Point {
+                x: evaluated_point.x - 1,
+                ..evaluated_point
             };
+            if start_point.x > 0 {
+                if self.coor(&left_point) != Some('^') {
+                    descendants_value +=
+                        self.check_path(left_point.clone(), paths_from_here, checked_start_points);
+                }
+            }
 
             let right_point = Point {
                 x: evaluated_point.x + 1,
                 ..evaluated_point
             };
-            let right_val = self
-                .coor(&right_point)
-                .filter(|c| *c != '^')
-                .map(|_| {
-                    self.check_path(
-                        Point {
-                            x: evaluated_point.x + 1,
-                            y: evaluated_point.y,
-                        },
-                        check_start_points,
-                    )
-                })
-                .unwrap_or_default();
+            if self.coor(&right_point) != Some('^') {
+                descendants_value +=
+                    self.check_path(right_point.clone(), paths_from_here, checked_start_points);
+            }
 
-            return 1 + left_val + right_val;
+            let score = 1 + descendants_value;
+            let child_value = paths_from_here.get(&left_point).unwrap()
+                + paths_from_here.get(&right_point).unwrap();
+            paths_from_here.insert(start_point.clone(), child_value);
+            return score;
         }
 
+        if start_point.y == self.max_height - 2 {
+            paths_from_here.insert(start_point, 1);
+        }
         0
     }
 }
