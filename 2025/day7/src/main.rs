@@ -28,11 +28,31 @@ fn main() {
     println!("{:?}", now.elapsed().unwrap());
     println!("Total beam breaks = {}", total_breaks);
 
-    for entry in paths {
-        if entry.1 > 0 {
-            println!("{:?}: {}", entry.0, entry.1);
-        }
+    // for entry in &paths {
+    //     if *entry.1 > 0 {
+    //         println!("{:?}: {}", entry.0, entry.1);
+    //     }
+    // }
+
+    let mut total_paths = 0;
+    let i = 0;
+    while total_paths == 0 {
+        total_paths = paths
+            .get(&Point {
+                x: start_point,
+                y: i,
+            })
+            .copied()
+            .unwrap_or(0);
     }
+    println!(
+        "Total possible paths: {}, start_node = {:?}",
+        total_paths,
+        Point {
+            x: start_point,
+            y: i
+        }
+    );
 }
 
 #[cfg(test)]

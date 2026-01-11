@@ -52,7 +52,7 @@ impl<'a> Map<'a> {
     pub(crate) fn check_path(
         &self,
         start_point: Point,
-        paths_from_here: &mut std::collections::HashMap<Point, u32>,
+        paths_from_here: &mut std::collections::HashMap<Point, u64>,
         checked_start_points: &mut Vec<Point>,
     ) -> u32 {
         let mut i = 0;
@@ -63,13 +63,16 @@ impl<'a> Map<'a> {
             };
 
             if paths_from_here.contains_key(&evaluated_point) {
+                paths_from_here.insert(
+                    start_point,
+                    paths_from_here.get(&evaluated_point).copied().unwrap(),
+                );
                 return 0;
             }
-            paths_from_here.insert(evaluated_point.clone(), 0);
 
             let val = match self.coor(&evaluated_point) {
                 Some(val) => val,
-                None => break,
+                None => return 0,
             };
 
             if val != '^' {
@@ -105,9 +108,7 @@ impl<'a> Map<'a> {
             return score;
         }
 
-        if start_point.y == self.max_height - 2 {
-            paths_from_here.insert(start_point, 1);
-        }
+        paths_from_here.insert(start_point, 1);
         0
     }
 }
