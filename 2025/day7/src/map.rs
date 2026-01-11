@@ -69,6 +69,8 @@ impl<'a> Map<'a> {
                 );
                 return 0;
             }
+            // UNCOMMENT THIS TO FIX PART 1 BUT BREAK PART 2
+            // paths_from_here.insert(evaluated_point.clone(), 0);
 
             let val = match self.coor(&evaluated_point) {
                 Some(val) => val,
