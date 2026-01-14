@@ -1,6 +1,6 @@
-use std::{env, fs};
+use std::{env, fs, time::SystemTime};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 struct Coor {
     x: u32,
     y: u32,
@@ -25,6 +25,7 @@ impl Coor {
 }
 
 fn main() {
+    let now = SystemTime::now();
     let args: Vec<String> = env::args().collect();
     let coors: Vec<Coor> = fs::read_to_string(&args[1])
         .expect("Couldnt read inputfile")
@@ -33,10 +34,18 @@ fn main() {
         .map(|s| Coor::new(s))
         .collect();
 
-    let mut circuits: Vec<Vec<Coor>> = coors.iter().map(|c| vec![c.clone()]).collect();
-    let mut sorted_distances = build_distance_map(&coors);
+    let runs_by_input = if args[1] == "testinput.txt" {
+        10
+    } else if args[1] == "input.txt" {
+        1000
+    } else {
+        panic!("Unknown input! ")
+    };
 
-    for _ in 0..10 {
+    let mut circuits: Vec<Vec<Coor>> = coors.iter().map(|c| vec![c.clone()]).collect();
+    let mut sorted_distances = build_distance_map_using_refs(&coors);
+
+    for _ in 0..runs_by_input {
         let shortest = sorted_distances.pop().expect("No more boxes to connect!");
         let index_of_v2 = circuits
             .iter()
@@ -65,6 +74,7 @@ fn main() {
     let longest = &circuits[circuits.len() - 1].len();
     let second_longest = &circuits[circuits.len() - 2].len();
     let third_longest = &circuits[circuits.len() - 3].len();
+    println!("time elapsed: {:?}", now.elapsed().unwrap());
     println!(
         "Lengths of longest circuits: {}, {}, {}. Product = {}",
         third_longest,
@@ -74,22 +84,23 @@ fn main() {
     );
 }
 
-fn build_distance_map(coors: &Vec<Coor>) -> Vec<((Coor, Coor), f64)> {
-    let mut distances = Vec::new();
+fn build_distance_map_using_refs(coors: &[Coor]) -> Vec<((&Coor, &Coor), f64)> {
+    let mut distance_map = std::collections::HashMap::new();
+    println!("in building distance map");
     for c1 in coors {
         for c2 in coors {
-            if distances
-                .iter()
-                .map(|t: &((Coor, Coor), f64)| t.0.clone())
-                .collect::<Vec<(Coor, Coor)>>()
-                .contains(&(c2.clone(), c1.clone()))
-            {
-                continue;
-            }
             if c1 != c2 {
-                distances.push(((c1.clone(), c2.clone()), c1.get_distance(c2)));
+                if distance_map.contains_key(&(c2, c1)) {
+                    continue;
+                }
+                distance_map.insert((c1, c2), c1.get_distance(&c2));
             }
         }
+    }
+
+    let mut distances = Vec::new();
+    for (k, v) in distance_map {
+        distances.push((k, v));
     }
 
     distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
