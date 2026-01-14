@@ -1,5 +1,7 @@
 use std::{env, fs, time::SystemTime};
 
+static PART2: bool = true;
+
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 struct Coor {
     x: u32,
@@ -45,43 +47,76 @@ fn main() {
     let mut circuits: Vec<Vec<Coor>> = coors.iter().map(|c| vec![c.clone()]).collect();
     let mut sorted_distances = build_distance_map_using_refs(&coors);
 
-    for _ in 0..runs_by_input {
-        let shortest = sorted_distances.pop().expect("No more boxes to connect!");
-        let index_of_v2 = circuits
-            .iter()
-            .position(|v| v.contains(&shortest.0.1))
-            .expect(format!("Couldnt find circuit containing v2 {:?}", shortest.0.1).as_str());
+    let mut last_jb1 = &Coor { x: 0, y: 0, z: 0 };
+    let mut last_jb2 = &Coor { x: 0, y: 0, z: 0 };
 
-        let index_of_v1 = circuits
-            .iter()
-            .position(|v| v.contains(&shortest.0.0))
-            .expect(format!("Couldnt find circuit containing v1 {:?}", shortest.0.0).as_str());
-
-        if index_of_v1 == index_of_v2 {
-            continue;
+    if !PART2 {
+        for _ in 0..runs_by_input {
+            let ((jb1, jb2), _) = sorted_distances
+                .pop()
+                .expect("No more connections to be made!");
+            _ = make_next_connection(jb1, jb2, &mut circuits)
         }
+    } else {
+        while circuits.len() > 1 {
+            //for ((jb1, jb2), _) in sorted_distances {
 
-        let vals = circuits[index_of_v2].clone();
-
-        for coor in vals {
-            circuits[index_of_v1].push(coor);
+            let ((jb1, jb2), _) = sorted_distances
+                .pop()
+                .expect("No more connections to be made!");
+            _ = make_next_connection(jb1, jb2, &mut circuits);
+            last_jb1 = jb1;
+            last_jb2 = jb2;
         }
-
-        circuits.remove(index_of_v2);
     }
 
-    circuits.sort_by(|a, b| a.len().cmp(&b.len()));
-    let longest = &circuits[circuits.len() - 1].len();
-    let second_longest = &circuits[circuits.len() - 2].len();
-    let third_longest = &circuits[circuits.len() - 3].len();
     println!("time elapsed: {:?}", now.elapsed().unwrap());
-    println!(
-        "Lengths of longest circuits: {}, {}, {}. Product = {}",
-        third_longest,
-        second_longest,
-        longest,
-        longest * second_longest * third_longest
-    );
+    if !PART2 {
+        circuits.sort_by(|a, b| a.len().cmp(&b.len()));
+        let longest = &circuits[circuits.len() - 1].len();
+        let second_longest = &circuits[circuits.len() - 2].len();
+        let third_longest = &circuits[circuits.len() - 3].len();
+        println!(
+            "Lengths of longest circuits: {}, {}, {}. Product = {}",
+            third_longest,
+            second_longest,
+            longest,
+            longest * second_longest * third_longest
+        );
+    } else {
+        println!(
+            "last jb1: {:?}, last jb2: {:?}, product of x's = {}",
+            last_jb1,
+            last_jb2,
+            last_jb1.x as u64 * last_jb2.x as u64
+        );
+    }
+}
+
+fn make_next_connection(jb1: &Coor, jb2: &Coor, circuits: &mut Vec<Vec<Coor>>) -> bool {
+    let index_of_circuit_containing_jb2 = circuits
+        .iter()
+        .position(|v| v.contains(jb2))
+        .expect(format!("Couldnt find circuit containing v2 {:?}", jb2).as_str());
+
+    let index_of_circuit_containing_jb1 = circuits
+        .iter()
+        .position(|v| v.contains(jb1))
+        .expect(format!("Couldnt find circuit containing v1 {:?}", jb1).as_str());
+
+    if index_of_circuit_containing_jb1 == index_of_circuit_containing_jb2 {
+        return false;
+    }
+
+    let vals = circuits[index_of_circuit_containing_jb2].clone();
+
+    for coor in vals {
+        circuits[index_of_circuit_containing_jb1].push(coor);
+    }
+
+    circuits.remove(index_of_circuit_containing_jb2);
+
+    true
 }
 
 fn build_distance_map_using_refs(coors: &[Coor]) -> Vec<((&Coor, &Coor), f64)> {
