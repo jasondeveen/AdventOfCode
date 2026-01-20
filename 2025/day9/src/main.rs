@@ -6,6 +6,26 @@ struct Point {
     y: u32,
 }
 
+#[derive(Debug)]
+struct Area<'a> {
+    points: &'a [Point],
+    prefix: HashMap<(u32, u32), u64>,
+}
+
+impl<'a> Area<'a> {
+    // use prefix
+    fn contains(&self, rect: (&Point, &Point)) -> bool {
+        false
+    }
+
+    fn new(points: &'a [Point]) -> Area {
+        Area {
+            points,
+            prefix: compute_prefix(points),
+        }
+    }
+}
+
 fn main() {
     let now = SystemTime::now();
     let args: Vec<String> = std::env::args().collect();
@@ -27,8 +47,17 @@ fn main() {
 
     println!("elapsed: {:?}", now.elapsed().unwrap());
     println!(
-        "Biggest rectangle: size {} between points {:?} and {:?}",
+        "PART1: Biggest rectangle: size {} between points {:?} and {:?}",
         biggest.1, biggest.0.0, biggest.0.1
+    );
+
+    let area = Area::new(&points);
+    let biggest_green = rectangles.iter().find(|r| area.contains(r.0)).unwrap();
+
+    println!("elapsed: {:?}", now.elapsed().unwrap());
+    println!(
+        "PART2: Biggest rectangle in green/red: size {} between points {:?} and {:?}",
+        biggest_green.1, biggest_green.0.0, biggest_green.0.1
     );
 }
 
@@ -50,12 +79,12 @@ fn build_distances_vec(points: &Vec<Point>) -> Vec<((&Point, &Point), u64)> {
         }
     }
 
-    let mut vec = Vec::new();
-    for (k, v) in rectangles {
-        vec.push((k, v));
-    }
-    vec.sort_by(|r1, r2| r1.1.partial_cmp(&r2.1).unwrap());
-    vec.reverse();
+    let mut vec: Vec<((&Point, &Point), u64)> =
+        rectangles.into_iter().map(|(k, v)| (k, v)).collect();
+    vec.sort_by(|r1, r2| r2.1.cmp(&r1.1));
 
     vec
 }
+
+// chatGPT: prefix sum/ summed-area table
+fn compute_prefix(points: &[Point]) -> HashMap<(u32, u32), u64> {}
