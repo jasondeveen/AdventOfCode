@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, time::SystemTime};
 
-#[derive(Debug, PartialEq, Hash, Eq)]
+#[derive(Debug, PartialEq, Hash, Eq, Clone, Copy)]
 struct Point {
     x: u32,
     y: u32,
@@ -9,7 +9,7 @@ struct Point {
 #[derive(Debug)]
 struct Area<'a> {
     points: &'a [Point],
-    prefix: HashMap<(u32, u32), u64>,
+    prefix: Vec<Vec<u32>>,
 }
 
 impl<'a> Area<'a> {
@@ -86,5 +86,93 @@ fn build_distances_vec(points: &Vec<Point>) -> Vec<((&Point, &Point), u64)> {
     vec
 }
 
-// chatGPT: prefix sum/ summed-area table
-fn compute_prefix(points: &[Point]) -> HashMap<(u32, u32), u64> {}
+fn compute_prefix(corners: &[Point]) -> Vec<Vec<u32>> {
+    let prefix = Vec::new();
+    let green_or_red_cells: Vec<Point> = get_painted_cells(corners);
+    for p in &green_or_red_cells {}
+
+    prefix
+}
+
+fn get_painted_cells(corners: &[Point]) -> Vec<Point> {
+    let edges = get_edges(corners);
+    get_filled_region(edges)
+}
+
+fn get_filled_region(edges: Vec<Point>) -> Vec<Point> {
+    todo!()
+}
+
+fn get_edges(corners: &[Point]) -> Vec<Point> {
+    let mut painted_cells = Vec::new();
+
+    for (i, _) in corners.iter().enumerate() {
+        let current_corner: Point = corners[i];
+        let next_corner;
+        if i < corners.len() - 1 {
+            next_corner = corners[i + 1];
+        } else {
+            next_corner = corners[0];
+        }
+
+        if current_corner.x == next_corner.x {
+            let mut y_offset: i32 = 0;
+            let step: i32 = if current_corner.y < next_corner.y {
+                1
+            } else {
+                -1
+            };
+            while current_corner.y.strict_add_signed(y_offset) != next_corner.y {
+                painted_cells.push(Point {
+                    x: current_corner.x,
+                    y: current_corner.y.strict_add_signed(y_offset),
+                });
+                y_offset += step;
+            }
+        } else if current_corner.y == next_corner.y {
+            let mut x_offset: i32 = 0;
+            let step: i32 = if current_corner.x < next_corner.x {
+                1
+            } else {
+                -1
+            };
+            while current_corner.x.strict_add_signed(x_offset) != next_corner.x {
+                painted_cells.push(Point {
+                    x: current_corner.x.strict_add_signed(x_offset),
+                    y: current_corner.y,
+                });
+                x_offset += step;
+            }
+        } else {
+            panic!(
+                "Cant connect corners! c1: {:#?} c2: {:#?}",
+                current_corner, next_corner
+            );
+        }
+    }
+
+    painted_cells
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_edges() {
+        let test_cases = [(
+            &[
+                Point { x: 7, y: 1 },
+                Point { x: 11, y: 1 },
+                Point { x: 11, y: 7 },
+                Point { x: 7, y: 7 },
+            ],
+            20,
+        )];
+
+        for (corners, expected_num_of_cells) in test_cases {
+            let res = get_edges(corners);
+            assert_eq!(res.len(), expected_num_of_cells);
+        }
+    }
+}
