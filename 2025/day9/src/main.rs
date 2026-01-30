@@ -100,7 +100,29 @@ fn get_painted_cells(corners: &[Point]) -> Vec<Point> {
 }
 
 fn get_filled_region(edges: Vec<Point>) -> Vec<Point> {
-    todo!()
+    let mut filled_region = Vec::new();
+    let largest_y = edges
+        .iter()
+        .fold(0, |acc, p| if p.y > acc { p.y } else { acc });
+
+    for j in 0..largest_y + 1 {
+        let line_edges: Vec<Point> = edges.iter().filter(|e| e.y == j).copied().collect();
+        if line_edges.len() == 0 {
+            continue;
+        }
+
+        let line_positions: Vec<u32> = line_edges.iter().map(|e| e.x).collect();
+        let line_outer_edges: (u32, u32) = (
+            line_positions.iter().min().unwrap().clone(),
+            line_positions.iter().max().unwrap().clone(),
+        );
+
+        for i in line_outer_edges.0..line_outer_edges.1 + 1 {
+            filled_region.push(Point { x: i, y: j });
+        }
+    }
+
+    filled_region
 }
 
 fn get_edges(corners: &[Point]) -> Vec<Point> {
@@ -159,20 +181,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_get_edges() {
-        let test_cases = [(
-            &[
-                Point { x: 7, y: 1 },
-                Point { x: 11, y: 1 },
-                Point { x: 11, y: 7 },
-                Point { x: 7, y: 7 },
-            ],
-            20,
-        )];
+    fn test() {
+        let test_cases = [
+            (
+                vec![
+                    Point { x: 7, y: 1 },
+                    Point { x: 11, y: 1 },
+                    Point { x: 11, y: 7 },
+                    Point { x: 7, y: 7 },
+                ],
+                20,
+                35,
+            ),
+            (
+                vec![
+                    Point { x: 7, y: 1 },
+                    Point { x: 11, y: 1 },
+                    Point { x: 11, y: 7 },
+                    Point { x: 9, y: 7 },
+                    Point { x: 9, y: 5 },
+                    Point { x: 2, y: 5 },
+                    Point { x: 2, y: 3 },
+                    Point { x: 7, y: 3 },
+                ],
+                4 + 6 + 2 + 2 + 7 + 2 + 5 + 2,
+                5 + 5 + 10 + 10 + 10 + 3 + 3,
+            ),
+        ];
 
-        for (corners, expected_num_of_cells) in test_cases {
-            let res = get_edges(corners);
-            assert_eq!(res.len(), expected_num_of_cells);
+        for (corners, expected_circ, expected_area) in test_cases {
+            let circ = get_edges(&corners);
+            assert_eq!(circ.len(), expected_circ, "circumference failed");
+            let region = get_filled_region(circ);
+            assert_eq!(region.len(), expected_area, "area failed");
         }
     }
 }
