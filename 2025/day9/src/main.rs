@@ -87,9 +87,46 @@ fn build_distances_vec(points: &Vec<Point>) -> Vec<((&Point, &Point), u64)> {
 }
 
 fn compute_prefix(corners: &[Point]) -> Vec<Vec<u32>> {
-    let prefix = Vec::new();
     let green_or_red_cells: Vec<Point> = get_painted_cells(corners);
-    for p in &green_or_red_cells {}
+
+    let max_x = green_or_red_cells
+        .clone()
+        .iter()
+        .fold(0, |acc, p| if p.x > acc { p.x } else { acc });
+    let max_y = green_or_red_cells
+        .clone()
+        .iter()
+        .fold(0, |acc, p| if p.y > acc { p.y } else { acc });
+
+    let mut prefix = vec![vec![0; max_x as usize + 1]; max_y as usize + 1];
+
+    for j in 0..max_y as usize + 1 {
+        for i in 0..max_x as usize + 1 {
+            let mut prefix_value: u32 = 0;
+            if green_or_red_cells.iter().any(|p| {
+                *p == Point {
+                    x: i as u32,
+                    y: j as u32,
+                }
+            }) {
+                prefix_value += 1;
+            }
+
+            if j > 0 {
+                prefix_value += prefix[j - 1][i as usize];
+            }
+
+            if i > 0 {
+                prefix_value += prefix[j][i - 1];
+            }
+
+            if i > 0 && j > 0 {
+                prefix_value -= prefix[j - 1][i - 1];
+            }
+
+            prefix[j][i] = prefix_value;
+        }
+    }
 
     prefix
 }
@@ -181,7 +218,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test() {
+    fn test_get_painted_cells() {
         let test_cases = [
             (
                 vec![
@@ -214,6 +251,36 @@ mod tests {
             assert_eq!(circ.len(), expected_circ, "circumference failed");
             let region = get_filled_region(circ);
             assert_eq!(region.len(), expected_area, "area failed");
+        }
+    }
+
+    #[test]
+    fn test_get_prefix() {
+        let test_cases = [
+            (
+                vec![
+                    Point { x: 1, y: 0 },
+                    Point { x: 3, y: 0 },
+                    Point { x: 3, y: 1 },
+                    Point { x: 1, y: 1 },
+                ],
+                vec![vec![0, 1, 2, 3], vec![0, 2, 4, 6]],
+            ),
+            (
+                vec![
+                    Point { x: 1, y: 0 },
+                    Point { x: 3, y: 0 },
+                    Point { x: 3, y: 1 },
+                    Point { x: 2, y: 1 },
+                    Point { x: 2, y: 2 },
+                    Point { x: 1, y: 2 },
+                ],
+                vec![vec![0, 1, 2, 3], vec![0, 2, 4, 6], vec![0, 3, 6, 8]],
+            ),
+        ];
+        for (corners, expected_prefix) in test_cases {
+            let prefix = compute_prefix(&corners);
+            assert_eq!(prefix, expected_prefix);
         }
     }
 }
