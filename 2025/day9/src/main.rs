@@ -7,20 +7,67 @@ struct Point {
 }
 
 #[derive(Debug)]
-struct Area<'a> {
-    points: &'a [Point],
+struct Rectangle<'a> {
+    opposing_corners: Vec<&'a Point>,
+    size: u32,
+    l: usize,
+    t: usize,
+    r: usize,
+    b: usize,
+}
+
+impl<'a> Rectangle<'a> {
+    fn new_from_tuple(opposing_corners_tuple: (&'a Point, &'a Point)) -> Rectangle<'a> {
+        let opposing_corners = vec![opposing_corners_tuple.0, opposing_corners_tuple.1];
+        Rectangle::new(opposing_corners)
+    }
+    fn new(opposing_corners: Vec<&'a Point>) -> Rectangle<'a> {
+        if opposing_corners.len() != 2 {
+            panic!(
+                "Invalid rectangle! number of points: {}",
+                opposing_corners.len()
+            );
+        }
+        Rectangle {
+            size: (opposing_corners[0].x.abs_diff(opposing_corners[1].x) + 1)
+                * (opposing_corners[0].y.abs_diff(opposing_corners[1].y) + 1),
+            l: opposing_corners.iter().map(|c| c.x).min().unwrap() as usize,
+            t: opposing_corners.iter().map(|c| c.y).min().unwrap() as usize,
+            r: opposing_corners.iter().map(|c| c.x).max().unwrap() as usize,
+            b: opposing_corners.iter().map(|c| c.y).max().unwrap() as usize,
+            opposing_corners,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Area {
     prefix: Vec<Vec<u32>>,
 }
 
-impl<'a> Area<'a> {
-    // use prefix
-    fn contains(&self, rect: (&Point, &Point)) -> bool {
-        false
+impl Area {
+    fn contains(&self, rect: Rectangle) -> bool {
+        let mut prefix_score = 0;
+
+        prefix_score += self.prefix[rect.b][rect.r];
+
+        if rect.l > 0 {
+            prefix_score -= self.prefix[rect.b][rect.l - 1];
+        }
+
+        if rect.t > 0 {
+            prefix_score -= self.prefix[rect.t - 1][rect.r];
+        }
+
+        if rect.t > 0 && rect.l > 0 {
+            prefix_score += self.prefix[rect.b - 1][rect.l - 1];
+        }
+
+        prefix_score == rect.size
     }
 
-    fn new(points: &'a [Point]) -> Area {
+    fn new(points: &[Point]) -> Area {
         Area {
-            points,
             prefix: compute_prefix(points),
         }
     }
@@ -52,7 +99,10 @@ fn main() {
     );
 
     let area = Area::new(&points);
-    let biggest_green = rectangles.iter().find(|r| area.contains(r.0)).unwrap();
+    let biggest_green = rectangles
+        .iter()
+        .find(|r| area.contains(Rectangle::new_from_tuple(r.0)))
+        .unwrap();
 
     println!("elapsed: {:?}", now.elapsed().unwrap());
     println!(
@@ -281,6 +331,54 @@ mod tests {
         for (corners, expected_prefix) in test_cases {
             let prefix = compute_prefix(&corners);
             assert_eq!(prefix, expected_prefix);
+        }
+    }
+
+    #[test]
+    fn test_rectangle() {
+        let test_cases = [(
+            vec![&Point { x: 3, y: 2 }, &Point { x: 6, y: 4 }],
+            Rectangle {
+                opposing_corners: vec![&Point { x: 3, y: 2 }, &Point { x: 6, y: 4 }],
+                size: 12,
+                l: 3,
+                t: 2,
+                r: 6,
+                b: 4,
+            },
+        )];
+        for (points, expected_rectangle) in test_cases {
+            let r = Rectangle::new(points);
+            assert_eq!(r.size, expected_rectangle.size);
+            assert_eq!(r.l, expected_rectangle.l);
+            assert_eq!(r.t, expected_rectangle.t);
+            assert_eq!(r.r, expected_rectangle.r);
+            assert_eq!(r.b, expected_rectangle.b);
+        }
+    }
+
+    #[test]
+    fn test_area_contains() {
+        let test_cases = [(
+            vec![
+                Point { x: 1, y: 0 },
+                Point { x: 3, y: 0 },
+                Point { x: 3, y: 1 },
+                Point { x: 1, y: 1 },
+            ],
+            vec![
+                ((&Point { x: 0, y: 0 }, &Point { x: 1, y: 1 }), false),
+                ((&Point { x: 1, y: 0 }, &Point { x: 2, y: 1 }), true),
+            ],
+        )];
+
+        for (area_points, tests) in test_cases {
+            let a = Area::new(&area_points);
+            for (r, expected_contains) in tests {
+                let rect = Rectangle::new_from_tuple(r);
+                let contains = a.contains(rect);
+                assert_eq!(contains, expected_contains);
+            }
         }
     }
 }
