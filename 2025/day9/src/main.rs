@@ -10,10 +10,10 @@ struct Point {
 struct Rectangle<'a> {
     opposing_corners: Vec<&'a Point>,
     size: u32,
-    l: usize,
-    t: usize,
-    r: usize,
-    b: usize,
+    l: u32,
+    t: u32,
+    r: u32,
+    b: u32,
 }
 
 impl<'a> Rectangle<'a> {
@@ -31,10 +31,10 @@ impl<'a> Rectangle<'a> {
         Rectangle {
             size: (opposing_corners[0].x.abs_diff(opposing_corners[1].x) + 1)
                 * (opposing_corners[0].y.abs_diff(opposing_corners[1].y) + 1),
-            l: opposing_corners.iter().map(|c| c.x).min().unwrap() as usize,
-            t: opposing_corners.iter().map(|c| c.y).min().unwrap() as usize,
-            r: opposing_corners.iter().map(|c| c.x).max().unwrap() as usize,
-            b: opposing_corners.iter().map(|c| c.y).max().unwrap() as usize,
+            l: opposing_corners.iter().map(|c| c.x).min().unwrap(),
+            t: opposing_corners.iter().map(|c| c.y).min().unwrap(),
+            r: opposing_corners.iter().map(|c| c.x).max().unwrap(),
+            b: opposing_corners.iter().map(|c| c.y).max().unwrap(),
             opposing_corners,
         }
     }
@@ -42,25 +42,49 @@ impl<'a> Rectangle<'a> {
 
 #[derive(Debug)]
 struct Area {
-    prefix: Vec<Vec<u32>>,
+    prefix: HashMap<Point, u32>,
 }
 
 impl Area {
     fn contains(&self, rect: Rectangle) -> bool {
         let mut prefix_score = 0;
 
-        prefix_score += self.prefix[rect.b][rect.r];
+        match self.prefix.get(&Point {
+            x: rect.r,
+            y: rect.b,
+        }) {
+            Some(prefix_self) => prefix_score += prefix_self,
+            None => (),
+        }
 
         if rect.l > 0 {
-            prefix_score -= self.prefix[rect.b][rect.l - 1];
+            match self.prefix.get(&Point {
+                x: rect.l - 1,
+                y: rect.b,
+            }) {
+                Some(prefix_left) => prefix_score -= prefix_left,
+                None => (),
+            }
         }
 
         if rect.t > 0 {
-            prefix_score -= self.prefix[rect.t - 1][rect.r];
+            match self.prefix.get(&Point {
+                x: rect.r,
+                y: rect.t - 1,
+            }) {
+                Some(prefix_above) => prefix_score -= prefix_above,
+                None => (),
+            }
         }
 
         if rect.t > 0 && rect.l > 0 {
-            prefix_score += self.prefix[rect.b - 1][rect.l - 1];
+            match self.prefix.get(&Point {
+                x: rect.l - 1,
+                y: rect.b - 1,
+            }) {
+                Some(prefix_above_left) => prefix_score += prefix_above_left,
+                None => (),
+            }
         }
 
         prefix_score == rect.size
@@ -136,45 +160,59 @@ fn build_distances_vec(points: &Vec<Point>) -> Vec<((&Point, &Point), u64)> {
     vec
 }
 
-fn compute_prefix(corners: &[Point]) -> Vec<Vec<u32>> {
+fn compute_prefix(corners: &[Point]) -> HashMap<Point, u32> {
     let green_or_red_cells: Vec<Point> = get_painted_cells(corners);
 
-    let max_x = green_or_red_cells
-        .clone()
-        .iter()
-        .fold(0, |acc, p| if p.x > acc { p.x } else { acc });
-    let max_y = green_or_red_cells
-        .clone()
-        .iter()
-        .fold(0, |acc, p| if p.y > acc { p.y } else { acc });
+    let max_x = green_or_red_cells.iter().map(|p| p.x).max().unwrap() as usize;
+    let min_x = green_or_red_cells.iter().map(|p| p.x).min().unwrap() as usize;
+    let max_y = green_or_red_cells.iter().map(|p| p.y).max().unwrap() as usize;
+    let min_y = green_or_red_cells.iter().map(|p| p.y).min().unwrap() as usize;
 
-    let mut prefix = vec![vec![0; max_x as usize + 1]; max_y as usize + 1];
+    let mut prefix = HashMap::new();
 
-    for j in 0..max_y as usize + 1 {
-        for i in 0..max_x as usize + 1 {
+    for j in min_y..max_y as usize + 1 {
+        for i in min_x..max_x as usize + 1 {
             let mut prefix_value: u32 = 0;
-            if green_or_red_cells.iter().any(|p| {
-                *p == Point {
-                    x: i as u32,
-                    y: j as u32,
-                }
-            }) {
+            let cp = Point {
+                x: i as u32,
+                y: j as u32,
+            };
+
+            if green_or_red_cells.iter().any(|p| *p == cp) {
                 prefix_value += 1;
             }
 
-            if j > 0 {
-                prefix_value += prefix[j - 1][i as usize];
+            if cp.y > 0 {
+                match prefix.get(&Point {
+                    x: cp.x,
+                    y: cp.y - 1,
+                }) {
+                    Some(prefix_above) => prefix_value += prefix_above,
+                    None => (),
+                }
             }
 
-            if i > 0 {
-                prefix_value += prefix[j][i - 1];
+            if cp.x > 0 {
+                match prefix.get(&Point {
+                    x: cp.x - 1,
+                    y: cp.y,
+                }) {
+                    Some(prefix_left) => prefix_value += prefix_left,
+                    None => (),
+                }
             }
 
-            if i > 0 && j > 0 {
-                prefix_value -= prefix[j - 1][i - 1];
+            if cp.x > 0 && cp.y > 0 {
+                match prefix.get(&Point {
+                    x: cp.x - 1,
+                    y: cp.y - 1,
+                }) {
+                    Some(prefix_left_above) => prefix_value -= prefix_left_above,
+                    None => (),
+                }
             }
 
-            prefix[j][i] = prefix_value;
+            prefix.insert(cp, prefix_value);
         }
     }
 
@@ -314,7 +352,14 @@ mod tests {
                     Point { x: 3, y: 1 },
                     Point { x: 1, y: 1 },
                 ],
-                vec![vec![0, 1, 2, 3], vec![0, 2, 4, 6]],
+                HashMap::from([
+                    (Point { x: 1, y: 0 }, 1),
+                    (Point { x: 2, y: 0 }, 2),
+                    (Point { x: 3, y: 0 }, 3),
+                    (Point { x: 1, y: 1 }, 2),
+                    (Point { x: 2, y: 1 }, 4),
+                    (Point { x: 3, y: 1 }, 6),
+                ]),
             ),
             (
                 vec![
@@ -325,7 +370,17 @@ mod tests {
                     Point { x: 2, y: 2 },
                     Point { x: 1, y: 2 },
                 ],
-                vec![vec![0, 1, 2, 3], vec![0, 2, 4, 6], vec![0, 3, 6, 8]],
+                HashMap::from([
+                    (Point { x: 1, y: 0 }, 1),
+                    (Point { x: 2, y: 0 }, 2),
+                    (Point { x: 3, y: 0 }, 3),
+                    (Point { x: 1, y: 1 }, 2),
+                    (Point { x: 2, y: 1 }, 4),
+                    (Point { x: 3, y: 1 }, 6),
+                    (Point { x: 1, y: 2 }, 3),
+                    (Point { x: 2, y: 2 }, 6),
+                    (Point { x: 3, y: 2 }, 8),
+                ]),
             ),
         ];
         for (corners, expected_prefix) in test_cases {
